@@ -7,13 +7,14 @@ Site estático: não tem servidor nem banco de dados. Todo o cálculo roda no na
 ## Estrutura
 
 ```
-index.html                         página
-css/app.css                        estilos
-js/app.js                          motor de cálculo e telas
-dados/transportadoras/index.json   lista das tabelas ativas (ordem de carregamento)
-dados/transportadoras/*.json       uma tabela por transportadora
-dados/cidades/*.json               listas de cidades por transportadora (praça, CEP, prazo)
-_headers                           cache do Cloudflare Pages (dados sempre atualizados)
+wrangler.jsonc                            configuração do Cloudflare Workers (publica a pasta public/)
+public/index.html                         página
+public/css/app.css                        estilos
+public/js/app.js                          motor de cálculo e telas
+public/dados/transportadoras/index.json   lista das tabelas ativas (ordem de carregamento)
+public/dados/transportadoras/*.json       uma tabela por transportadora
+public/dados/cidades/*.json               listas de cidades por transportadora (praça, CEP, prazo)
+public/_headers                           cache (dados sempre atualizados)
 ```
 
 ### Transportadoras e listas de cidades
@@ -33,16 +34,17 @@ _headers                           cache do Cloudflare Pages (dados sempre atual
 2. O arquivo é enviado ao Claude no projeto "Proloplast – Frete".
 3. O Claude converte para o JSON da transportadora e gera um **relatório de conferência**: o que mudou, o reajuste médio por praça, os valores fora do padrão e as cotações de referência antes e depois.
 4. Depois da aprovação, o Claude envia o arquivo para este repositório, por commit ou pull request.
-5. O Cloudflare Pages publica sozinho em cerca de 1 minuto.
+5. O Cloudflare publica sozinho em cerca de 1 minuto.
 6. Se algo der errado, basta reverter o commit no GitHub.
 
-Para incluir uma transportadora nova, crie o JSON em `dados/transportadoras/` e acrescente o nome do arquivo em `index.json`.
+Para incluir uma transportadora nova, crie o JSON em `public/dados/transportadoras/` e acrescente o nome do arquivo em `index.json`.
 
 ## Testar localmente
 
 O site carrega os dados com `fetch`, por isso não funciona abrindo o `index.html` direto do disco. Use um servidor local:
 
 ```
+cd public
 python -m http.server 8000
 ```
 
@@ -50,6 +52,6 @@ Depois abra http://localhost:8000
 
 ## Publicação
 
-- Hospedagem: Cloudflare Pages, ligado a este repositório (branch `main`), sem comando de build e com diretório de saída `/`.
+- Hospedagem: Cloudflare Workers (Static Assets), ligado a este repositório (branch `main`). Build command: vazio. Deploy command: `npx wrangler deploy`. O `wrangler.jsonc` publica a pasta `public/`.
 - Acesso: Cloudflare Access, com login por código enviado ao e-mail.
 - Domínio: subdomínio do cliente (ex.: `frete.proloplast.com.br`).

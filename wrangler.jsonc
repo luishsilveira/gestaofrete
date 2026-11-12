@@ -1,0 +1,9 @@
+{
+  // Site estático da calculadora de frete (Cloudflare Workers + Static Assets)
+  "name": "gestaofrete",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  }
+}
