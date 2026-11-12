@@ -117,7 +117,8 @@
     111.8
    ],
    "fpk": 1.74,
-   "fvPct": 0.53
+   "fvPct": 0.53,
+   "naoAuto": true
   },
   {
    "regiao": "Interior de SP 1",

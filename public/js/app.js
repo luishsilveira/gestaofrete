@@ -23,6 +23,11 @@ const ufDoCep=n=>{ const r=UFCEP.find(([a,b])=>n>=a&&n<=b); return r?r[2]:null; 
 const fp=p=>p==1?'1 dia útil':p+' dias úteis';
 const brl=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+// chave de comparação de nomes de cidade: sem acento, sem pontuação (D'OESTE = D OESTE)
+const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
+const IDX={};
+[['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
+const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
 let tonMode='exc'; let override={};
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
@@ -45,9 +50,30 @@ function setDest(d,from){ dest=d; override={};
   calc(); }
 $('cid').addEventListener('change',()=>{ $('cep').value=''; setDest(parseCidade($('cid').value),'cid'); });
 $('uf').addEventListener('change',()=>{ $('cep').value=''; setDest({uf:$('uf').value,cidade:''},'uf'); });
-$('cep').addEventListener('input',()=>{ const dg=$('cep').value.replace(/\D/g,''); if(dg.length<8) return; const n=+dg.slice(0,8);
+// consulta do CEP: ViaCEP, com BrasilAPI como reserva; se as duas falharem, usa as listas das transportadoras
+const CEPCACHE=new Map(); let cepSeq=0;
+async function buscaJSON(url,ms=5000){ const ac=new AbortController(); const tm=setTimeout(()=>ac.abort(),ms);
+  try{ const r=await fetch(url,{signal:ac.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); } finally{ clearTimeout(tm); } }
+async function consultaCep(cep8){
+  if(CEPCACHE.has(cep8)) return CEPCACHE.get(cep8);
+  let res=null;
+  try{ const j=await buscaJSON(`https://viacep.com.br/ws/${cep8}/json/`);
+    if(j&&!j.erro&&j.localidade) res={cidade:j.localidade,uf:j.uf,ibge:j.ibge,fonte:'ViaCEP'};
+    else if(j&&j.erro) res={inexistente:true}; }catch(e){}
+  if(!res){ try{ const j=await buscaJSON(`https://brasilapi.com.br/api/cep/v2/${cep8}`);
+    if(j&&j.city) res={cidade:j.city,uf:j.state,fonte:'BrasilAPI'}; }catch(e){} }
+  if(res&&!res.inexistente) CEPCACHE.set(cep8,res);
+  return res;
+}
+$('cep').addEventListener('input',async()=>{ const dg=$('cep').value.replace(/\D/g,''); if(dg.length<8) return; const n=+dg.slice(0,8);
   const ufc=ufDoCep(n);
   if(!ufc){ $('destinfo').innerHTML='CEP inválido.'; return; }
+  const seq=++cepSeq; $('destinfo').innerHTML='Consultando CEP…';
+  const r=await consultaCep(dg.slice(0,8));
+  if(seq!==cepSeq) return; // o usuário já digitou outro CEP
+  if(r&&r.inexistente){ dest={uf:ufc,cidade:'',invalido:true}; $('cid').value=''; calc(); return; }
+  if(r&&r.uf){ setDest({uf:r.uf,cidade:norm(r.cidade),cep:n,ibge:r.ibge,fonteCep:r.fonte},'cep'); return; }
+  // reserva: listas das transportadoras
   let best=null; const chk=(c,uf,a,b)=>{ if(uf!==ufc||ufDoCep(a)!==uf||ufDoCep(b)!==uf) return; if(n>=a&&n<=b&&(!best||b-a<best.w)) best={c,uf,w:b-a}; };
   D.rtemap.forEach(x=>{ for(let i=0;i<x[5].length;i+=2) chk(x[0],x[1],x[5][i],x[5][i+1]); });
   D.tbmap.forEach(x=>chk(x[0],x[1],x[3],x[4]));
@@ -62,7 +88,7 @@ function resolver(t){
   if(override[t.id]!==undefined) return {i:override[t.id],fonte:'man',txt:'escolha manual',op:doUf};
   if(t.mapa&&dest.semLista) return {erro:'a cidade desse CEP não está na lista de cidades atendidas'};
   if(t.mapa==='tb'&&c){
-    const m=D.tbmap.find(x=>x[0]===c&&x[1]===uf);
+    const m=IDX.tb.get(K(c)+'|'+uf);
     if(!m) return {erro:`${c}/${uf} não está na lista de cidades atendidas`};
     const want=(dep&&m[2]==='RS1');
     let i=t.rotas.findIndex(r=>r.cod===m[2]&&!!r.deposito===want);
@@ -70,22 +96,22 @@ function resolver(t){
     return {i,fonte:'lista',txt:`praça ${m[2]} pela lista de cidades`,prazo:m[5],op:doUf};
   }
   if(t.mapa==='tjb'&&c){
-    const m=D.tjmap.find(x=>x[0]===c&&x[1]===uf);
+    const m=IDX.tjb.get(K(c)+'|'+uf);
     if(!m) return {erro:`${c}/${uf} não está na lista de cidades atendidas`};
     if(!m[2]) return {erro:t.semTarifa};
     return {i:t.rotas.findIndex(r=>r.regiao===m[2]),fonte:'lista',txt:'praça pela lista de cidades',prazo:m[3],freq:m[4],op:doUf};
   }
   if(t.mapa==='sm'&&c){
-    const m=D.smmap.find(x=>x[0]===c&&x[1]===uf);
+    const m=IDX.sm.get(K(c)+'|'+uf);
     if(!m) return {erro:`${c}/${uf} não está na lista de cidades atendidas`};
     const i=t.rotas.findIndex(r=>r.regiao===m[2]);
     if(i<0) return {erro:`praça ${m[2]} sem tarifa na tabela`};
     return {i,fonte:'lista',txt:`praça ${m[2]} pela lista de cidades`,prazo:m[5]===m[6]?m[5]:`${m[5]} a ${m[6]}`,freq:m[7],op:doUf};
   }
   if(t.mapa==='rte'&&c){
-    const m=D.rtemap.find(x=>x[0]===c&&x[1]===uf);
+    const m=IDX.rte.get(K(c)+'|'+uf);
     if(!m) return {erro:`${c}/${uf} não está na lista de cidades atendidas`};
-    let i=t.rotas.findIndex(r=>r.cidade===c&&r.uf===uf);
+    let i=t.rotas.findIndex(r=>r.cidade&&K(r.cidade)===K(c)&&r.uf===uf);
     const polo=(t.aliasPolo&&t.aliasPolo[m[2]])||m[2];
     if(i<0) i=t.rotas.findIndex(r=>r.regiao===polo);
     if(i<0) return {erro:`polo ${m[2]} sem tarifa. ${t.semTarifa}`};
@@ -94,19 +120,19 @@ function resolver(t){
   if(!doUf.length) return {erro:`não atende ${uf}`};
   if(c){ // praça com o nome da cidade (ex.: "Imperatriz - IP1", "Palmas", "Maceio")
     const base=r=>r.tarifaKg!=null?r.tarifaKg:(r.faixas?r.faixas[0]:(r.kg||0));
-    const byCity=doUf.filter(x=>{ const n=norm(x.r.regiao.split(' - ')[0].replace(/\(.*?\)/g,'')); return n===c||n.startsWith(c+' E ')||n.startsWith(c+' REG'); }).sort((a,b)=>base(a.r)-base(b.r))[0];
+    const byCity=doUf.filter(x=>!x.r.naoAuto).filter(x=>{ const n=K(x.r.regiao.split(' - ')[0].replace(/\(.*?\)/g,'')), cc=K(c); return n===cc||n.startsWith(cc+' E ')||n.startsWith(cc+' REG'); }).sort((a,b)=>base(a.r)-base(b.r))[0];
     if(byCity) return {i:byCity.i,fonte:'cap',txt:'praça da cidade',op:doUf};
   }
-  if(c&&c===CAPITAL[uf]&&!t.semCapital){
-    const cap=doUf.find(x=>!/^interior/i.test(x.r.regiao)); if(cap) return {i:cap.i,fonte:'cap',txt:'capital',op:doUf};
+  if(c&&K(c)===CAPITAL[uf]&&!t.semCapital){
+    const cap=doUf.find(x=>!x.r.naoAuto&&!/^interior/i.test(x.r.regiao)); if(cap) return {i:cap.i,fonte:'cap',txt:'capital',op:doUf};
   }
   const first=(c||dest.semLista)?(doUf.find(x=>/interior/i.test(x.r.regiao))||doUf[0]):doUf[0];
   return {i:first.i,fonte:'man',txt:(c||dest.semLista)?'sem lista de cidades: confira a praça':'escolha a praça',op:doUf,aviso:!!c};
 }
 
 function extrasRte(t,c,uf){
-  const k=c+'|'+uf, ex=(D.txcid[k]||[]).map(([n,v])=>({n,v,d:'taxa de entrega da cidade'}));
-  t.especiais.forEach(e=>{ if(e.cidades.includes(k)) ex.push({n:e.nome,faixas:e.faixas}); });
+  const k=K(c)+'|'+uf, ex=(TXCID.get(k)||[]).map(([n,v])=>({n,v,d:'taxa de entrega da cidade'}));
+  t.especiais.forEach(e=>{ if(e.cidades.some(x=>{ const [a,b]=x.split('|'); return K(a)+'|'+b===k; })) ex.push({n:e.nome,faixas:e.faixas}); });
   const cep=dest.cep; const inZ=z=>cep&&z.some(([a,b])=>cep>=a&&cep<=b);
   if(inZ(D.zr)) ex.push({n:t.zonaRestricao.nome,faixas:t.zonaRestricao.faixas});
   if(inZ(D.zk)) ex.push({n:t.zonaRisco.nome,v:t.zonaRisco.valor,d:'CEP em zona de risco'});
@@ -161,13 +187,14 @@ function cotar(t,r,p,nf,uf,op,rvx={}){
 }
 
 function calc(){
+  if(dest.invalido){ $('destinfo').innerHTML='CEP não encontrado nos Correios. Confira o número ou digite a cidade.'; $('out').innerHTML=''; $('avisos').innerHTML=''; return; }
   const uf=dest.uf, peso=+$('peso').value||0, nf=+$('nf').value||0;
   let m3=+$('m3').value||0; const dim=(+$('c').value)*(+$('l').value)*(+$('a').value)*(+$('qv').value||1);
   if(dim>0) m3=dim;
   const pt=Math.max(peso,m3*300);
   const ptDe=t=>(t.isentoCubM3&&m3<=t.isentoCubM3)?peso:Math.max(peso,m3*(t.cubagem||300));
   $('pt').textContent=pt.toLocaleString('pt-BR',{maximumFractionDigits:2})+' kg'+(m3>0?`  (cubado: ${(m3*300).toLocaleString('pt-BR',{maximumFractionDigits:2})} kg)`:'');
-  $('destinfo').innerHTML=dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
+  $('destinfo').innerHTML=dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}${dest.fonteCep?` <span class="small">(cidade confirmada pelos Correios via ${dest.fonteCep})</span>`:(dest.cep?' <span class="small">(cidade pelas listas das transportadoras; consulta aos Correios indisponível)</span>':'')}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
   const op={tde:$('o_tde').checked,tda:$('o_tda').checked,trt:$('o_trt').checked,ag:$('o_ag').checked,pal:$('o_pal').checked,int:false,icms:$('icms').checked};
   $('icmsinfo').textContent=op.icms?`Alíquota aplicada RS → ${uf}: ${aliqICMS(uf)}%`:'Valores sem ICMS';
   const res=[], nao=[];
