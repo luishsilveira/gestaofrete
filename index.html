@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proloplast – Cotação de Frete</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header>
+<h1>Cotação de Frete – Proloplast</h1>
+<p class="sub" id="subt">Carregando tabelas…</p>
+<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="json">Modelo de dados</button></nav>
+</header>
+<main>
+<section id="calc">
+<div class="grid">
+<div class="card">
+<h2>Destino</h2>
+<div class="row2">
+<div><label>CEP</label><input id="cep" placeholder="00000-000" inputmode="numeric"></div>
+<div><label>UF</label><select id="uf"></select></div>
+</div>
+<label>Cidade (digite para buscar)</label>
+<input id="cid" list="cidades" placeholder="Ex.: CAMPINAS" autocomplete="off">
+<datalist id="cidades"></datalist>
+<div class="dest small" id="destinfo"></div>
+<h2 style="margin-top:18px">Carga</h2>
+<div class="row2">
+<div><label>Peso real (kg)</label><input id="peso" type="number" value="150" min="0" step="0.1"></div>
+<div><label>Valor da NF (R$)</label><input id="nf" type="number" value="5000" min="0" step="0.01"></div>
+</div>
+<label>Volume (m³) — ou informe as dimensões abaixo</label>
+<input id="m3" type="number" value="0" min="0" step="0.001">
+<div class="row">
+<div><label>Compr. (m)</label><input id="c" type="number" value="0.16" step="0.01"></div>
+<div><label>Larg. (m)</label><input id="l" type="number" value="0.40" step="0.01"></div>
+<div><label>Alt. (m)</label><input id="a" type="number" value="0.55" step="0.01"></div>
+</div>
+<label>Qtd. de volumes com essas dimensões</label><input id="qv" type="number" value="1" min="1">
+<h2 style="margin-top:18px">Regras</h2>
+<label>Coluna "Tonelada" (Trânsito Brasil, TJB)</label>
+<div class="mode" id="tonmode"><button data-m="exc" class="on">Excedente sobre última faixa</button><button data-m="tot">Peso total (mín. última faixa)</button></div>
+<label class="chk"><input type="checkbox" id="icms" checked> Incluir ICMS "por dentro" (frete ÷ (1 − alíq.))</label>
+<div class="small" id="icmsinfo"></div>
+<label class="chk"><input type="checkbox" id="dep"> Mercadoria entregue no depósito (Trânsito Brasil, RS1)</label>
+<h2 style="margin-top:18px">Taxas eventuais</h2>
+<label class="chk"><input type="checkbox" id="o_tde"> TDE – cidade com dificuldade de entrega</label>
+<label class="chk"><input type="checkbox" id="o_tda"> TDA – dificuldade de acesso</label>
+<label class="chk"><input type="checkbox" id="o_trt"> TRT – restrição de trânsito</label>
+<label class="chk"><input type="checkbox" id="o_ag"> Agendamento / comprovante de entrega</label>
+<label class="chk"><input type="checkbox" id="o_pal"> Paletização (1 pallet)</label>
+</div>
+<div>
+<div class="card" style="padding:12px 18px;margin-bottom:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="flex:1"><span class="small">Peso taxado (maior entre real e cubado a 300 kg/m³): </span><b class="mono" id="pt"></b></div><label class="chk" style="margin:0;font-weight:500"><input type="checkbox" id="simples" checked> Visão simplificada (só valor e prazo)</label></div>
+<div class="res" id="out"></div>
+<div class="note" id="avisos"></div>
+</div>
+</div>
+</section>
+
+<section id="tab" class="hide">
+<div class="card">
+<label>Transportadora</label>
+<select id="tsel" style="max-width:360px"></select>
+<div id="tview" style="margin-top:16px"></div>
+</div>
+</section>
+
+<section id="json" class="hide">
+<div class="card">
+<h2>Estrutura normalizada (JSON)</h2>
+<p class="small">É assim que as tabelas ficam depois de normalizadas. O mesmo formato serve para cadastrar uma transportadora nova. Percentuais estão em % (0,25 = 0,25%). As listas de cidades da Trânsito Brasil (com faixas de CEP) e da TJB ficam em tabelas separadas: cidade, UF, praça e prazo.</p>
+<button class="btn" id="cp">Copiar JSON</button> <span class="small" id="cpok"></span>
+<pre id="js"></pre>
+</div>
+</section>
+</main>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+{
+ "id": "rte",
+ "transportadora": "Rodonaves (RTE)",
+ "origem": "Nova Santa Rita/RS",
+ "fonte": "PROLOPLAST ... ATT 10.11.2026 x RODONAVES.xlsx",
+ "vigencia": "atualizada em 10/11/2026",
+ "modelo": "pctNF",
+ "cubagem": 300,
+ "mapa": "rte",
+ "acima": null,
+ "gris": {
+  "pct": 0.1,
+  "min": 1.91,
+  "acimaNF": 10000,
+  "pctAcima": 0.23,
+  "porUf": {
+   "RJ": 0.3,
+   "ES": 0.3,
+   "MT": 0.3,
+   "MS": 0.3,
+   "AM": 0.3,
+   "PA": 0.3,
+   "RO": 0.3,
+   "RR": 0.3,
+   "AP": 0.3,
+   "TO": 0.3,
+   "AC": 0.3
+  },
+  "porUnd": {
+   "203": 0.1,
+   "205": 0.1,
+   "881": 0.15,
+   "882": 0.15,
+   "883": 0.15,
+   "884": 0.15,
+   "885": 0.15,
+   "886": 0.15
+  }
+ },
+ "pedagio": 15.35,
+ "fixas": [
+  {
+   "nome": "TAS (SEFAZ/SUFRAMA)",
+   "valor": 14.01,
+   "ufs": [
+    "GO",
+    "MG",
+    "DF",
+    "MT",
+    "MS",
+    "RO",
+    "AC",
+    "PA",
+    "RR",
+    "AP",
+    "TO",
+    "AM"
+   ]
+  }
+ ],
+ "pctFrete": [],
+ "pctSubtotal": [],
+ "opcionais": [
+  {
+   "id": "tde",
+   "nome": "TDE – dificuldade de entrega (mínimo)",
+   "valor": 155.2
+  },
+  {
+   "id": "comp",
+   "nome": "Cópia autenticada do comprovante",
+   "valor": 6.25
+  }
+ ],
+ "especiais": [
+  {
+   "nome": "Tarifa Goiânia",
+   "cidades": [
+    "ABADIA DE GOIAS|GO",
+    "APARECIDA DE GOIANIA|GO",
+    "GOIANIA|GO",
+    "GOIANIRA|GO",
+    "INHUMAS|GO",
+    "SENADOR CANEDO|GO",
+    "TRINDADE|GO"
+   ],
+   "faixas": [
+    [
+     100,
+     17.35
+    ],
+    [
+     1000000000.0,
+     40.95
+    ]
+   ]
+  },
+  {
+   "nome": "Tarifa cidades específicas",
+   "cidades": [
+    "PORTO ALEGRE|RS",
+    "CURITIBA|PR",
+    "ITAJAI|SC",
+    "NAVEGANTES|SC"
+   ],
+   "faixas": [
+    [
+     60,
+     5.63
+    ],
+    [
+     1000000000.0,
+     14.08
+    ]
+   ]
+  },
+  {
+   "nome": "Tarifa Camboriú",
+   "cidades": [
+    "CAMBORIU|SC",
+    "BALNEARIO CAMBORIU|SC"
+   ],
+   "faixas": [
+    [
+     60,
+     11.25
+    ],
+    [
+     1000000000.0,
+     28.25
+    ]
+   ]
+  },
+  {
+   "nome": "Tarifa 094 (região de Brasília)",
+   "cidades": [
+    "AGUAS LINDAS DE GOIAS|GO",
+    "BRASILIA|DF",
+    "CIDADE OCIDENTAL|GO",
+    "FORMOSA|GO",
+    "LUZIANIA|GO",
+    "NOVO GAMA|GO",
+    "PADRE BERNARDO|GO",
+    "PLANALTINA|GO",
+    "VALPARAISO DE GOIAS|GO"
+   ],
+   "faixas": [
+    [
+     300,
+     15
+    ],
+    [
+     1000000000.0,
+     360
+    ]
+   ]
+  }
+ ],
+ "zonaRestricao": {
+  "nome": "Zona de restrição SP (centro expandido)",
+  "faixas": [
+   [
+    100,
+    81.93
+   ],
+   [
+    200,
+    105.59
+   ],
+   [
+    300,
+    141.99
+   ],
+   [
+    500,
+    191.15
+   ],
+   [
+    1000,
+    318.6
+   ],
+   [
+    1500,
+    628.11
+   ],
+   [
+    1000000000.0,
+    873.88
+   ]
+  ]
+ },
+ "zonaRisco": {
+  "nome": "Zona de risco SP – entrega",
+  "valor": 80.19
+ },
+ "aliasPolo": {
+  "DF - INTERIOR": "DF - CAPITAL"
+ },
+ "semTarifa": "Região Norte e MA: a proposta da Rodonaves para o Norte não foi enviada.",
+ "rotas": [
+  {
+   "regiao": "RS - CAPITAL",
+   "uf": "RS",
+   "cidade": null,
+   "fmin": 55.76,
+   "pct": 1.224,
+   "minKg": 0.94,
+   "limNF": 4555.56
+  },
+  {
+   "regiao": "RS - INTERIOR",
+   "uf": "RS",
+   "cidade": null,
+   "fmin": 69.65,
+   "pct": 1.224,
+   "minKg": 1.13,
+   "limNF": 5690.36
+  },
+  {
+   "regiao": "SC - CAPITAL",
+   "uf": "SC",
+   "cidade": null,
+   "fmin": 99.47,
+   "pct": 1.314,
+   "minKg": 1.47,
+   "limNF": 7570.02
+  },
+  {
+   "regiao": "SC - INTERIOR",
+   "uf": "SC",
+   "cidade": null,
+   "fmin": 104.66,
+   "pct": 1.314,
+   "minKg": 1.41,
+   "limNF": 7964.99
+  },
+  {
+   "regiao": "PR - CAPITAL",
+   "uf": "PR",
+   "cidade": null,
+   "fmin": 116.6,
+   "pct": 1.314,
+   "minKg": 1.51,
+   "limNF": 8873.67
+  },
+  {
+   "regiao": "PR - INTERIOR",
+   "uf": "PR",
+   "cidade": null,
+   "fmin": 128.58,
+   "pct": 1.314,
+   "minKg": 1.63,
+   "limNF": 9785.39
+  },
+  {
+   "regiao": "SP - CAPITAL",
+   "uf": "SP",
+   "cidade": null,
+   "fmin": 179.41,
+   "pct": 1.314,
+   "minKg": 1.8,
+   "limNF": 13653.73
+  },
+  {
+   "regiao": "SP - INTERIOR",
+   "uf": "SP",
+   "cidade": null,
+   "fmin": 149.52,
+   "pct": 1.314,
+   "minKg": 1.79,
+   "limNF": 11379
+  },
+  {
+   "regiao": "MG - CAPITAL",
+   "uf": "MG",
+   "cidade": null,
+   "fmin": 164.47,
+   "pct": 1.314,
+   "minKg": 1.91,
+   "limNF": 12516.74
+  },
+  {
+   "regiao": "MG - INTERIOR",
+   "uf": "MG",
+   "cidade": null,
+   "fmin": 182.38,
+   "pct": 1.314,
+   "minKg": 2.01,
+   "limNF": 13879.76
+  },
+  {
+   "regiao": "GO - CAPITAL",
+   "uf": "GO",
+   "cidade": null,
+   "fmin": 194.36,
+   "pct": 1.314,
+   "minKg": 2.1,
+   "limNF": 14791.48
+  },
+  {
+   "regiao": "GO - INTERIOR",
+   "uf": "GO",
+   "cidade": null,
+   "fmin": 197.36,
+   "pct": 1.314,
+   "minKg": 2.13,
+   "limNF": 15019.79
+  },
+  {
+   "regiao": "DF - CAPITAL",
+   "uf": "DF",
+   "cidade": null,
+   "fmin": 209.34,
+   "pct": 1.314,
+   "minKg": 2.1,
+   "limNF": 15931.51
+  },
+  {
+   "regiao": "MS - INTERIOR",
+   "uf": "MS",
+   "cidade": null,
+   "fmin": 218.29,
+   "pct": 1.314,
+   "minKg": 2.74,
+   "limNF": 16612.63
+  },
+  {
+   "regiao": "MT - INTERIOR",
+   "uf": "MT",
+   "cidade": null,
+   "fmin": 239.19,
+   "pct": 1.314,
+   "minKg": 2.98,
+   "limNF": 18203.2
+  },
+  {
+   "regiao": "RO - INTERIOR",
+   "uf": "RO",
+   "cidade": null,
+   "fmin": 251.2,
+   "pct": 1.708,
+   "minKg": 4.47,
+   "limNF": 14707.26
+  },
+  {
+   "regiao": "AC - INTERIOR",
+   "uf": "AC",
+   "cidade": null,
+   "fmin": 285.22,
+   "pct": 1.708,
+   "minKg": 4.97,
+   "limNF": 16699.06
+  },
+  {
+   "regiao": "RJ - INTERIOR",
+   "uf": "RJ",
+   "cidade": null,
+   "fmin": 288.5,
+   "pct": 1.314,
+   "minKg": 4.82,
+   "limNF": 21955.86
+  },
+  {
+   "regiao": "ES - INTERIOR",
+   "uf": "ES",
+   "cidade": null,
+   "fmin": 315.05,
+   "pct": 1.314,
+   "minKg": 4.82,
+   "limNF": 23976.41
+  },
+  {
+   "regiao": "ANHANDUI - MS",
+   "uf": "MS",
+   "cidade": "ANHANDUI",
+   "fmin": 215.3,
+   "pct": 1.314,
+   "minKg": 2.68,
+   "limNF": 16385.08
+  },
+  {
+   "regiao": "CAMPO GRANDE - MS",
+   "uf": "MS",
+   "cidade": "CAMPO GRANDE",
+   "fmin": 215.3,
+   "pct": 1.314,
+   "minKg": 2.68,
+   "limNF": 16385.08
+  },
+  {
+   "regiao": "CUIABA - MT",
+   "uf": "MT",
+   "cidade": "CUIABA",
+   "fmin": 248.7,
+   "pct": 1.314,
+   "minKg": 3.15,
+   "limNF": 18926.94
+  },
+  {
+   "regiao": "RIO DE JANEIRO - RJ",
+   "uf": "RJ",
+   "cidade": "RIO DE JANEIRO",
+   "fmin": 301.76,
+   "pct": 1.314,
+   "minKg": 4.82,
+   "limNF": 22964.99
+  },
+  {
+   "regiao": "VITORIA - ES",
+   "uf": "ES",
+   "cidade": "VITORIA",
+   "fmin": 324.96,
+   "pct": 1.314,
+   "minKg": 4.82,
+   "limNF": 24730.59
+  }
+ ]
+}

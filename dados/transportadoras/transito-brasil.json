@@ -1,0 +1,988 @@
+{
+ "id": "tb",
+ "transportadora": "Trânsito Brasil",
+ "origem": "RS1 – Nova Santa Rita/RS",
+ "fonte": "TABELA_PROLOPLAST_X_Transito_Brasil.ods",
+ "vigencia": "não informada",
+ "modelo": "faixas",
+ "limites": [
+  20,
+  50,
+  100,
+  150,
+  200
+ ],
+ "cubagem": 300,
+ "gris": {
+  "pct": 0.25,
+  "min": 0
+ },
+ "pedagio": 6.67,
+ "fixas": [
+  {
+   "nome": "TAS",
+   "valor": 3.95
+  }
+ ],
+ "pctFrete": [],
+ "opcionais": [
+  {
+   "id": "tde",
+   "nome": "TDE – dificuldade de entrega",
+   "pct": 30,
+   "min": 100
+  },
+  {
+   "id": "tda",
+   "nome": "TDA – dificuldade de acesso",
+   "pct": 30,
+   "min": 100
+  },
+  {
+   "id": "trt",
+   "nome": "TRT – restrição de trânsito",
+   "pct": 5,
+   "min": 15
+  },
+  {
+   "id": "comp",
+   "nome": "Comprovante de entrega",
+   "valor": 10
+  }
+ ],
+ "rotas": [
+  {
+   "regiao": "RS1",
+   "cod": "RS1",
+   "uf": "RS",
+   "deposito": false,
+   "faixas": [
+    49.09,
+    63.75,
+    80.55,
+    93.23,
+    107.89
+   ],
+   "ton": 360.9,
+   "fvPct": 0.15
+  },
+  {
+   "regiao": "RS2",
+   "cod": "RS2",
+   "uf": "RS",
+   "deposito": false,
+   "faixas": [
+    49.09,
+    63.75,
+    80.55,
+    93.23,
+    107.89
+   ],
+   "ton": 358.92,
+   "fvPct": 0.15
+  },
+  {
+   "regiao": "RS3",
+   "cod": "RS3",
+   "uf": "RS",
+   "deposito": false,
+   "faixas": [
+    41.51,
+    65.06,
+    99.16,
+    130.62,
+    163.56
+   ],
+   "ton": 700.05,
+   "fvPct": 0.15
+  },
+  {
+   "regiao": "RS4",
+   "cod": "RS4",
+   "uf": "RS",
+   "deposito": false,
+   "faixas": [
+    44.14,
+    71.49,
+    112.01,
+    150.06,
+    189.26
+   ],
+   "ton": 828.86,
+   "fvPct": 0.15
+  },
+  {
+   "regiao": "SC1",
+   "cod": "SC1",
+   "uf": "SC",
+   "deposito": false,
+   "faixas": [
+    79.58,
+    96.68,
+    150.02,
+    211.48,
+    268.88
+   ],
+   "ton": 605.03,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SC2",
+   "cod": "SC2",
+   "uf": "SC",
+   "deposito": false,
+   "faixas": [
+    74.5,
+    93.64,
+    124.37,
+    168.72,
+    213.95
+   ],
+   "ton": 605.03,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SC3",
+   "cod": "SC3",
+   "uf": "SC",
+   "deposito": false,
+   "faixas": [
+    115.24,
+    131.31,
+    186.56,
+    261.77,
+    328.12
+   ],
+   "ton": 2026.47,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PR1",
+   "cod": "PR1",
+   "uf": "PR",
+   "deposito": false,
+   "faixas": [
+    47.69,
+    74.79,
+    113.93,
+    150.17,
+    187.86
+   ],
+   "ton": 641.99,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "PR2",
+   "cod": "PR2",
+   "uf": "PR",
+   "deposito": false,
+   "faixas": [
+    144.08,
+    171.62,
+    222.07,
+    313.24,
+    399.78
+   ],
+   "ton": 1703.18,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "PR3",
+   "cod": "PR3",
+   "uf": "PR",
+   "deposito": false,
+   "faixas": [
+    144.08,
+    171.62,
+    222.07,
+    313.24,
+    399.78
+   ],
+   "ton": 1703.18,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "PR4",
+   "cod": "PR4",
+   "uf": "PR",
+   "deposito": false,
+   "faixas": [
+    144.08,
+    171.62,
+    222.07,
+    313.24,
+    399.78
+   ],
+   "ton": 1703.18,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SP1",
+   "cod": "SP1",
+   "uf": "SP",
+   "deposito": false,
+   "faixas": [
+    82.62,
+    100.74,
+    136.98,
+    166.11,
+    196.41
+   ],
+   "ton": 759.11,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SP2",
+   "cod": "SP2",
+   "uf": "SP",
+   "deposito": false,
+   "faixas": [
+    154.23,
+    138.14,
+    247.72,
+    344.98,
+    441.52
+   ],
+   "ton": 2035.41,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SP3",
+   "cod": "SP3",
+   "uf": "SP",
+   "deposito": false,
+   "faixas": [
+    136.25,
+    200.03,
+    267.44,
+    368.76,
+    470.37
+   ],
+   "ton": 2199.64,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "SP4",
+   "cod": "SP4",
+   "uf": "SP",
+   "deposito": false,
+   "faixas": [
+    187.42,
+    224.96,
+    278.74,
+    398.62,
+    513.71
+   ],
+   "ton": 2406.19,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "RJ1",
+   "cod": "RJ1",
+   "uf": "RJ",
+   "deposito": false,
+   "faixas": [
+    172.93,
+    210.03,
+    263.38,
+    341.36,
+    437.17
+   ],
+   "ton": 2010.76,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "RJ2",
+   "cod": "RJ2",
+   "uf": "RJ",
+   "deposito": false,
+   "faixas": [
+    206.85,
+    243.81,
+    297.15,
+    360.78,
+    461.67
+   ],
+   "ton": 2133.1,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "MG1",
+   "cod": "MG1",
+   "uf": "MG",
+   "deposito": false,
+   "faixas": [
+    177.28,
+    215.83,
+    270.77,
+    341.22,
+    434.27
+   ],
+   "ton": 1981.48,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "MG2",
+   "cod": "MG2",
+   "uf": "MG",
+   "deposito": false,
+   "faixas": [
+    192.06,
+    225.11,
+    274.39,
+    350.64,
+    447.32
+   ],
+   "ton": 2025.11,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "MG3",
+   "cod": "MG3",
+   "uf": "MG",
+   "deposito": false,
+   "faixas": [
+    195.39,
+    234.97,
+    293.96,
+    416.59,
+    534.87
+   ],
+   "ton": 2461.71,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "MG4",
+   "cod": "MG4",
+   "uf": "MG",
+   "deposito": false,
+   "faixas": [
+    274.97,
+    313.53,
+    368.32,
+    496.02,
+    626.33
+   ],
+   "ton": 2766.25,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "ES1",
+   "cod": "ES1",
+   "uf": "ES",
+   "deposito": false,
+   "faixas": [
+    185.36,
+    224.42,
+    279.57,
+    361.22,
+    463.39
+   ],
+   "ton": 2136.81,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "ES2",
+   "cod": "ES2",
+   "uf": "ES",
+   "deposito": false,
+   "faixas": [
+    236.83,
+    275.89,
+    331.19,
+    438.42,
+    566.49
+   ],
+   "ton": 2651.98,
+   "fvPct": 0.35
+  },
+  {
+   "regiao": "BA1",
+   "cod": "BA1",
+   "uf": "BA",
+   "deposito": false,
+   "faixas": [
+    251.27,
+    304.0,
+    458.07,
+    634.68,
+    807.15
+   ],
+   "ton": 3598.99,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "BA2",
+   "cod": "BA2",
+   "uf": "BA",
+   "deposito": false,
+   "faixas": [
+    259.33,
+    312.07,
+    471.51,
+    654.74,
+    834.04
+   ],
+   "ton": 3733.2,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "BA3",
+   "cod": "BA3",
+   "uf": "BA",
+   "deposito": false,
+   "faixas": [
+    328.28,
+    410.08,
+    473.2,
+    662.23,
+    843.75
+   ],
+   "ton": 3809.92,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "GO1",
+   "cod": "GO1",
+   "uf": "GO",
+   "deposito": false,
+   "faixas": [
+    223.65,
+    262.72,
+    318.02,
+    421.57,
+    537.38
+   ],
+   "ton": 2450.99,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "GO2",
+   "cod": "GO2",
+   "uf": "GO",
+   "deposito": false,
+   "faixas": [
+    250.0,
+    289.06,
+    344.21,
+    464.16,
+    593.91
+   ],
+   "ton": 2733.63,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "DF1",
+   "cod": "DF1",
+   "uf": "DF",
+   "deposito": false,
+   "faixas": [
+    229.63,
+    268.69,
+    323.99,
+    436.43,
+    557.29
+   ],
+   "ton": 2550.57,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "MS1",
+   "cod": "MS1",
+   "uf": "MS",
+   "deposito": false,
+   "faixas": [
+    145.53,
+    191.48,
+    286.46,
+    397.98,
+    508.28
+   ],
+   "ton": 2377.31,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "MS2",
+   "cod": "MS2",
+   "uf": "MS",
+   "deposito": false,
+   "faixas": [
+    167.43,
+    224.42,
+    325.98,
+    473.35,
+    609.07
+   ],
+   "ton": 2880.53,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "MT1",
+   "cod": "MT1",
+   "uf": "MT",
+   "deposito": false,
+   "faixas": [
+    221.66,
+    260.27,
+    314.95,
+    428.31,
+    534.78
+   ],
+   "ton": 2324.92,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "MT2",
+   "cod": "MT2",
+   "uf": "MT",
+   "deposito": false,
+   "faixas": [
+    267.46,
+    306.07,
+    360.76,
+    496.94,
+    626.23
+   ],
+   "ton": 2782.49,
+   "fvPct": 0.45
+  },
+  {
+   "regiao": "MT3",
+   "cod": "MT3",
+   "uf": "MT",
+   "deposito": false,
+   "faixas": [
+    330.12,
+    369.64,
+    425.4,
+    594.37,
+    755.52
+   ],
+   "ton": 3419.14,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "SE1",
+   "cod": "SE1",
+   "uf": "SE",
+   "deposito": false,
+   "faixas": [
+    265.74,
+    318.48,
+    482.26,
+    670.87,
+    855.54
+   ],
+   "ton": 3840.74,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "SE2",
+   "cod": "SE2",
+   "uf": "SE",
+   "deposito": false,
+   "faixas": [
+    296.35,
+    349.08,
+    533.14,
+    747.38,
+    957.5
+   ],
+   "ton": 4350.92,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "AL1",
+   "cod": "AL1",
+   "uf": "AL",
+   "deposito": false,
+   "faixas": [
+    265.74,
+    318.48,
+    482.26,
+    670.87,
+    855.54
+   ],
+   "ton": 3840.74,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "AL2",
+   "cod": "AL2",
+   "uf": "AL",
+   "deposito": false,
+   "faixas": [
+    296.35,
+    349.08,
+    533.14,
+    747.38,
+    957.5
+   ],
+   "ton": 4350.92,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PE1",
+   "cod": "PE1",
+   "uf": "PE",
+   "deposito": false,
+   "faixas": [
+    271.75,
+    356.47,
+    464.62,
+    588.39,
+    741.89
+   ],
+   "ton": 2949.47,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PE2",
+   "cod": "PE2",
+   "uf": "PE",
+   "deposito": false,
+   "faixas": [
+    417.13,
+    499.85,
+    610.91,
+    776.97,
+    992.04
+   ],
+   "ton": 3904.43,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PB1",
+   "cod": "PB1",
+   "uf": "PB",
+   "deposito": false,
+   "faixas": [
+    267.4,
+    320.13,
+    484.95,
+    674.8,
+    860.92
+   ],
+   "ton": 3867.62,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PB2",
+   "cod": "PB2",
+   "uf": "PB",
+   "deposito": false,
+   "faixas": [
+    301.1,
+    354.05,
+    541.2,
+    759.59,
+    973.63
+   ],
+   "ton": 4431.57,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "RN1",
+   "cod": "RN1",
+   "uf": "RN",
+   "deposito": false,
+   "faixas": [
+    268.84,
+    321.78,
+    487.64,
+    678.93,
+    866.3
+   ],
+   "ton": 3894.51,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "RN2",
+   "cod": "RN2",
+   "uf": "RN",
+   "deposito": false,
+   "faixas": [
+    307.72,
+    360.46,
+    551.96,
+    775.51,
+    995.13
+   ],
+   "ton": 4539.11,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "CE1",
+   "cod": "CE1",
+   "uf": "CE",
+   "deposito": false,
+   "faixas": [
+    268.84,
+    321.78,
+    487.64,
+    678.93,
+    866.3
+   ],
+   "ton": 3894.51,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "CE2",
+   "cod": "CE2",
+   "uf": "CE",
+   "deposito": false,
+   "faixas": [
+    307.72,
+    360.46,
+    551.96,
+    775.51,
+    995.13
+   ],
+   "ton": 4539.11,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PI1",
+   "cod": "PI1",
+   "uf": "PI",
+   "deposito": false,
+   "faixas": [
+    279.87,
+    318.02,
+    436.28,
+    610.3,
+    779.88
+   ],
+   "ton": 3529.89,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PI2",
+   "cod": "PI2",
+   "uf": "PI",
+   "deposito": false,
+   "faixas": [
+    358.46,
+    396.6,
+    510.27,
+    721.51,
+    928.01
+   ],
+   "ton": 4271.01,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "MA1",
+   "cod": "MA1",
+   "uf": "MA",
+   "deposito": false,
+   "faixas": [
+    279.87,
+    318.02,
+    436.28,
+    610.3,
+    779.88
+   ],
+   "ton": 3529.89,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "MA2",
+   "cod": "MA2",
+   "uf": "MA",
+   "deposito": false,
+   "faixas": [
+    336.71,
+    374.24,
+    518.54,
+    718.91,
+    925.1
+   ],
+   "ton": 4261.05,
+   "fvPct": 0.55
+  },
+  {
+   "regiao": "PA1",
+   "cod": "PA1",
+   "uf": "PA",
+   "deposito": false,
+   "faixas": [
+    227.33,
+    301.63,
+    462.17,
+    566.79,
+    714.47
+   ],
+   "ton": 3145.39,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "PA2",
+   "cod": "PA2",
+   "uf": "PA",
+   "deposito": false,
+   "faixas": [
+    330.42,
+    487.44,
+    726.57,
+    804.54,
+    1028.81
+   ],
+   "ton": 4677.26,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "AP1",
+   "cod": "AP1",
+   "uf": "AP",
+   "deposito": false,
+   "faixas": [
+    304.08,
+    390.63,
+    579.51,
+    716.0,
+    913.46
+   ],
+   "ton": 4140.04,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "AM1",
+   "cod": "AM1",
+   "uf": "AM",
+   "deposito": false,
+   "faixas": [
+    228.4,
+    326.14,
+    473.81,
+    614.59,
+    778.19
+   ],
+   "ton": 3463.72,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "RR1",
+   "cod": "RR1",
+   "uf": "RR",
+   "deposito": false,
+   "faixas": [
+    290.44,
+    424.63,
+    630.21,
+    838.39,
+    1076.6
+   ],
+   "ton": 4955.76,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "TO1",
+   "cod": "TO1",
+   "uf": "TO",
+   "deposito": false,
+   "faixas": [
+    271.75,
+    349.11,
+    454.81,
+    595.74,
+    751.69
+   ],
+   "ton": 2949.47,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "TO2",
+   "cod": "TO2",
+   "uf": "TO",
+   "deposito": false,
+   "faixas": [
+    326.75,
+    404.57,
+    537.53,
+    713.39,
+    909.01
+   ],
+   "ton": 3506.45,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "AC1",
+   "cod": "AC1",
+   "uf": "AC",
+   "deposito": false,
+   "faixas": [
+    278.8,
+    416.82,
+    615.81,
+    825.68,
+    993.88
+   ],
+   "ton": 3903.36,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "AC2",
+   "cod": "AC2",
+   "uf": "AC",
+   "deposito": false,
+   "faixas": [
+    322.31,
+    535.24,
+    810.82,
+    1099.88,
+    1327.98
+   ],
+   "ton": 5295.99,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "RO1",
+   "cod": "RO1",
+   "uf": "RO",
+   "deposito": false,
+   "faixas": [
+    278.8,
+    384.81,
+    562.96,
+    751.23,
+    903.04
+   ],
+   "ton": 3525.3,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "RO2",
+   "cod": "RO2",
+   "uf": "RO",
+   "deposito": false,
+   "faixas": [
+    278.8,
+    416.82,
+    615.81,
+    825.68,
+    993.88
+   ],
+   "ton": 3903.36,
+   "fvPct": 0.75
+  },
+  {
+   "regiao": "RS1 (entregue no depósito)",
+   "cod": "RS1",
+   "uf": "RS",
+   "deposito": true,
+   "faixas": [
+    34.5,
+    55.95,
+    87.7,
+    117.41,
+    148.0
+   ],
+   "ton": 648.37,
+   "fvPct": 0.15
+  }
+ ],
+ "mapa": "tb",
+ "acima": "ton",
+ "pctSubtotal": []
+}

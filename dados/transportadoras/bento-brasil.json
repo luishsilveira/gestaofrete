@@ -1,0 +1,172 @@
+{
+ "id": "bento",
+ "transportadora": "Bento Brasil Transportes",
+ "origem": "Nova Santa Rita/RS",
+ "fonte": "PROLOPLAST_IND_E_COM_DE_EMBALAGENS_EIRELI.pdf",
+ "vigencia": "desde 14/05/2025",
+ "modelo": "kg",
+ "cubagem": 300,
+ "advalorem": {
+  "pct": 0.8,
+  "isentoNoMinimoAte": 1000
+ },
+ "pedagio": 6.0,
+ "gris": {
+  "pct": 0,
+  "min": 0
+ },
+ "fixas": [],
+ "pctFrete": [],
+ "opcionais": [
+  {
+   "id": "pal",
+   "nome": "Paletização (1 pallet)",
+   "valor": 55
+  }
+ ],
+ "semCotacao": [
+  "PA5",
+  "PI3",
+  "Manaus/AM",
+  "Macapá/AP",
+  "Santana/AP"
+ ],
+ "rotas": [
+  {
+   "regiao": "Capital - PA1",
+   "uf": "PA",
+   "tarifaKg": 1.42,
+   "minimo": 145,
+   "prazo": 15
+  },
+  {
+   "regiao": "Interior - PA2",
+   "uf": "PA",
+   "tarifaKg": 1.55,
+   "minimo": 180,
+   "prazo": 22
+  },
+  {
+   "regiao": "Interior - PA3",
+   "uf": "PA",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 25
+  },
+  {
+   "regiao": "Interior - PA4",
+   "uf": "PA",
+   "tarifaKg": 2.2,
+   "minimo": 308,
+   "prazo": 28
+  },
+  {
+   "regiao": "Imperatriz - IP3",
+   "uf": "MA",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 25
+  },
+  {
+   "regiao": "Capital - MA1",
+   "uf": "MA",
+   "tarifaKg": 1.42,
+   "minimo": 145,
+   "prazo": 16
+  },
+  {
+   "regiao": "Interior - MA2",
+   "uf": "MA",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 22
+  },
+  {
+   "regiao": "Interior - MA4",
+   "uf": "MA",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 22
+  },
+  {
+   "regiao": "Imperatriz - IP1",
+   "uf": "MA",
+   "tarifaKg": 1.42,
+   "minimo": 145,
+   "prazo": 15
+  },
+  {
+   "regiao": "Imperatriz - IP2",
+   "uf": "MA",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 22
+  },
+  {
+   "regiao": "Capital - PI1",
+   "uf": "PI",
+   "tarifaKg": 1.42,
+   "minimo": 145,
+   "prazo": 16
+  },
+  {
+   "regiao": "Interior - PI2",
+   "uf": "PI",
+   "tarifaKg": 2.0,
+   "minimo": 270,
+   "prazo": 22
+  },
+  {
+   "regiao": "Capital - TO1",
+   "uf": "TO",
+   "tarifaKg": 1.55,
+   "minimo": 145,
+   "prazo": 14
+  },
+  {
+   "regiao": "Interior - TO2",
+   "uf": "TO",
+   "tarifaKg": 2.0,
+   "minimo": 180,
+   "prazo": 16
+  },
+  {
+   "regiao": "Capital - GO1",
+   "uf": "GO",
+   "tarifaKg": 0.96,
+   "minimo": 115,
+   "prazo": 10
+  },
+  {
+   "regiao": "Interior - GO2",
+   "uf": "GO",
+   "tarifaKg": 1.55,
+   "minimo": 180,
+   "prazo": 14
+  },
+  {
+   "regiao": "Interior GO - DF2",
+   "uf": "GO",
+   "tarifaKg": 1.55,
+   "minimo": 180,
+   "prazo": 14
+  },
+  {
+   "regiao": "Capital - DF1",
+   "uf": "DF",
+   "tarifaKg": 0.98,
+   "minimo": 115,
+   "prazo": 10
+  },
+  {
+   "regiao": "Interior - DF2",
+   "uf": "DF",
+   "tarifaKg": 1.55,
+   "minimo": 180,
+   "prazo": 14
+  }
+ ],
+ "mapa": null,
+ "acima": null,
+ "pctSubtotal": []
+}

@@ -1,0 +1,250 @@
+{
+ "id": "sm",
+ "transportadora": "Expresso São Miguel",
+ "origem": "Canoas/RS",
+ "fonte": "Contrato 137598/2026 – Transportadora São Miguel.pdf",
+ "vigencia": "desde 22/03/2026 (12 meses)",
+ "modelo": "taxaKg",
+ "cubagem": 300,
+ "isentoCubM3": 0.3,
+ "mapa": "sm",
+ "semCapital": true,
+ "acima": null,
+ "acrescimoKg": [
+  [
+   500,
+   10
+  ],
+  [
+   1000,
+   25
+  ]
+ ],
+ "gris": {
+  "pct": 0.17,
+  "min": 3.79,
+  "porUf": {
+   "SP": 0.22
+  },
+  "minPorUf": {
+   "SP": 7.08
+  }
+ },
+ "pedagio": 3.79,
+ "pedagioUf": {
+  "SP": 7.08
+ },
+ "fixas": [
+  {
+   "nome": "TAS (SEFAZ)",
+   "valor": 3.0
+  }
+ ],
+ "pctFrete": [],
+ "pctSubtotal": [],
+ "opcionais": [
+  {
+   "id": "tde",
+   "nome": "TDE – difícil entrega",
+   "pct": 20,
+   "min": 222.0
+  }
+ ],
+ "infos": [
+  "Pequenos volumes (S.V.D.): valor fixo por embarque só para documentos e envelopes sem valor comercial (SP R$ 105, PR R$ 87, SC R$ 68, RS R$ 50). Não se aplica a mercadorias."
+ ],
+ "rotas": [
+  {
+   "regiao": "SP1",
+   "uf": "SP",
+   "unidades": "EK/EL/FQ/ET",
+   "taxa": 106.22,
+   "kg": 1.471,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SP2",
+   "uf": "SP",
+   "unidades": "FI/GJ/GL/EM/FO/FP/EQ/FB/ER/ES",
+   "taxa": 104.88,
+   "kg": 1.453,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SP3",
+   "uf": "SP",
+   "unidades": "GG/FX/FJ",
+   "taxa": 111.18,
+   "kg": 1.537,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SP4",
+   "uf": "SP",
+   "unidades": "EJ/FR",
+   "taxa": 106.22,
+   "kg": 1.471,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR1",
+   "uf": "PR",
+   "unidades": "P/XX/Q/EV/R/EG/CV/EI/AW",
+   "taxa": 67.38,
+   "kg": 0.954,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR2",
+   "uf": "PR",
+   "unidades": "T/U/FA/BN/EB/DA/O",
+   "taxa": 80.28,
+   "kg": 1.125,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR3",
+   "uf": "PR",
+   "unidades": "CC/AS/EX/BX/AZ/DR",
+   "taxa": 90.23,
+   "kg": 1.257,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR4",
+   "uf": "PR",
+   "unidades": "EF/DZ/DO/CQ/DS/ED",
+   "taxa": 70.06,
+   "kg": 0.988,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR5",
+   "uf": "PR",
+   "unidades": "DD/FG/FK/CY/EN/CR",
+   "taxa": 88.4,
+   "kg": 1.232,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "PR6",
+   "uf": "PR",
+   "unidades": "FV/DU/FW/DV/BF/DY/DJ/DM/EC",
+   "taxa": 79.24,
+   "kg": 1.109,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC1",
+   "uf": "SC",
+   "unidades": "BI/G/H/I/BL/DQ/N/BR/DT/EW/BU/BZ/BA",
+   "taxa": 60.28,
+   "kg": 0.857,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC2",
+   "uf": "SC",
+   "unidades": "AR/CH/AG/V/AH/DK/FN/Y/DN/AL/L",
+   "taxa": 57.66,
+   "kg": 0.821,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC3",
+   "uf": "SC",
+   "unidades": "FF/DE/DI/FM/EP/DP/BO/BW/GB/EA/FC/CB",
+   "taxa": 65.6,
+   "kg": 0.928,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC4",
+   "uf": "SC",
+   "unidades": "EE/CD/BT/EY/BY/CA",
+   "taxa": 64.59,
+   "kg": 0.914,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC5",
+   "uf": "SC",
+   "unidades": "CS/DH/EZ",
+   "taxa": 73.73,
+   "kg": 1.037,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "SC6",
+   "uf": "SC",
+   "unidades": "EU/DF/DG/GE/DC/FE/GF",
+   "taxa": 54.19,
+   "kg": 0.776,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS1",
+   "uf": "RS",
+   "unidades": "A/GI/B/AT/CX/FL/CZ/CO/CP",
+   "taxa": 42.0,
+   "kg": 0.615,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS2",
+   "uf": "RS",
+   "unidades": "BS/FH/S/EH/DX/AF/X/EO",
+   "taxa": 40.24,
+   "kg": 0.589,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS3",
+   "uf": "RS",
+   "unidades": "C/CF/AE/D/E/BK/J/BP/AU/BV/CW/AV/AX/GC/GD",
+   "taxa": 47.54,
+   "kg": 0.654,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS4",
+   "uf": "RS",
+   "unidades": "AA/AB/AC/BH/W/AK/Z/GA/K/M/AO",
+   "taxa": 55.53,
+   "kg": 0.793,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS5",
+   "uf": "RS",
+   "unidades": "AD/CK/CL/AM/AN/FD",
+   "taxa": 46.64,
+   "kg": 0.674,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS6",
+   "uf": "RS",
+   "unidades": "AQ/BB/BC/BD/BE/BG/AY/BJ",
+   "taxa": 64.28,
+   "kg": 0.863,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS7",
+   "uf": "RS",
+   "unidades": "AI/AJ/BQ",
+   "taxa": 53.13,
+   "kg": 0.763,
+   "fvPct": 0.5
+  },
+  {
+   "regiao": "RS8",
+   "uf": "RS",
+   "unidades": "DL/CN/BM/FS/AP",
+   "taxa": 48.34,
+   "kg": 0.699,
+   "fvPct": 0.5
+  }
+ ]
+}

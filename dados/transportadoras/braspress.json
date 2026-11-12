@@ -1,0 +1,1473 @@
+{
+ "id": "bp",
+ "transportadora": "Braspress",
+ "origem": "Porto Alegre/RS",
+ "fonte": "Tab_Proloplast_X_Braspress.pdf",
+ "vigencia": "desde 01/09/2026",
+ "modelo": "faixas",
+ "acima": "kg",
+ "limites": [
+  10,
+  20,
+  35,
+  50,
+  70
+ ],
+ "cubagem": 300,
+ "mapa": null,
+ "gris": {
+  "pct": 0.18,
+  "min": 2.91
+ },
+ "pedagio": 4.11,
+ "fixas": [
+  {
+   "nome": "TX coleta/entrega",
+   "valor": 1.46
+  },
+  {
+   "nome": "SUFRAMA",
+   "valor": 39.91,
+   "ufs": [
+    "AM",
+    "RO",
+    "AC",
+    "RR",
+    "AP"
+   ]
+  },
+  {
+   "nome": "TAS RODO (SEFAZ)",
+   "valor": 2.97,
+   "ufs": [
+    "GO",
+    "DF",
+    "MS",
+    "MT",
+    "BA",
+    "SE",
+    "AL",
+    "PE",
+    "PB",
+    "RN",
+    "CE",
+    "PI",
+    "MA",
+    "AM",
+    "RO",
+    "AC",
+    "RR",
+    "AP",
+    "PA",
+    "TO",
+    "MG"
+   ]
+  }
+ ],
+ "pctFrete": [],
+ "pctSubtotal": [
+  {
+   "nome": "ADM RODO",
+   "pct": 3.41,
+   "min": 0.01
+  }
+ ],
+ "opcionais": [
+  {
+   "id": "trt",
+   "nome": "TRT – restrição de trânsito",
+   "porUf": {
+    "MG": [
+     35.16,
+     50.2
+    ],
+    "RJ": [
+     35.16,
+     50.2
+    ],
+    "SP": [
+     8.88,
+     12.13
+    ]
+   }
+  }
+ ],
+ "rotas": [
+  {
+   "regiao": "Sao Paulo e Reg. Metropolitana (Exp)",
+   "uf": "SP",
+   "faixas": [
+    87.93,
+    104.55,
+    128.15,
+    150.55,
+    167.7
+   ],
+   "fpk": 2.63,
+   "fvPct": 0.79
+  },
+  {
+   "regiao": "Sao Paulo e Reg. Metropolitana (Imp)",
+   "uf": "SP",
+   "faixas": [
+    58.62,
+    69.69,
+    85.46,
+    100.34,
+    111.8
+   ],
+   "fpk": 1.74,
+   "fvPct": 0.53
+  },
+  {
+   "regiao": "Interior de SP 1",
+   "uf": "SP",
+   "faixas": [
+    64.49,
+    76.66,
+    93.97,
+    110.4,
+    122.97
+   ],
+   "fpk": 1.92,
+   "fvPct": 0.58
+  },
+  {
+   "regiao": "Interior de SP 2",
+   "uf": "SP",
+   "faixas": [
+    69.71,
+    82.86,
+    101.6,
+    119.33,
+    132.94
+   ],
+   "fpk": 2.07,
+   "fvPct": 0.59
+  },
+  {
+   "regiao": "Rio de Janeiro e Reg Metropoli",
+   "uf": "RJ",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de RJ 1",
+   "uf": "RJ",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91
+  },
+  {
+   "regiao": "Interior de RJ 2",
+   "uf": "RJ",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95
+  },
+  {
+   "regiao": "Belo Horizonte e Reg Metropol.",
+   "uf": "MG",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de MG 1",
+   "uf": "MG",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91
+  },
+  {
+   "regiao": "Interior de MG 2",
+   "uf": "MG",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95
+  },
+  {
+   "regiao": "Interior de MG 3",
+   "uf": "MG",
+   "faixas": [
+    82.79,
+    98.42,
+    120.65,
+    141.72,
+    157.86
+   ],
+   "fpk": 2.45,
+   "fvPct": 1.02
+  },
+  {
+   "regiao": "Vitoria e Reg. Metropolitana",
+   "uf": "ES",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de ES 1",
+   "uf": "ES",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91
+  },
+  {
+   "regiao": "Interior de ES 2",
+   "uf": "ES",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95
+  },
+  {
+   "regiao": "Curitiba e Reg Metropolitana",
+   "uf": "PR",
+   "faixas": [
+    50.24,
+    59.74,
+    73.24,
+    86.01,
+    95.82
+   ],
+   "fpk": 1.48,
+   "fvPct": 0.49
+  },
+  {
+   "regiao": "Interior de PR 1",
+   "uf": "PR",
+   "faixas": [
+    55.24,
+    65.7,
+    80.53,
+    94.6,
+    105.38
+   ],
+   "fpk": 1.64,
+   "fvPct": 0.49
+  },
+  {
+   "regiao": "Interior de PR 2",
+   "uf": "PR",
+   "faixas": [
+    59.73,
+    71.03,
+    87.06,
+    102.29,
+    113.93
+   ],
+   "fpk": 1.76,
+   "fvPct": 0.51
+  },
+  {
+   "regiao": "Porto Alegre e Reg Metropolita",
+   "uf": "RS",
+   "faixas": [
+    31.05,
+    37.95,
+    50.04,
+    73.59,
+    81.99
+   ],
+   "fpk": 1.29,
+   "fvPct": 0.16
+  },
+  {
+   "regiao": "Interior de RS 1",
+   "uf": "RS",
+   "faixas": [
+    31.05,
+    37.95,
+    50.04,
+    80.96,
+    90.17
+   ],
+   "fpk": 1.39,
+   "fvPct": 0.16
+  },
+  {
+   "regiao": "Interior de RS 2",
+   "uf": "RS",
+   "faixas": [
+    35.69,
+    42.81,
+    53.53,
+    87.51,
+    97.48
+   ],
+   "fpk": 1.52,
+   "fvPct": 0.25
+  },
+  {
+   "regiao": "Florianopolis",
+   "uf": "SC",
+   "faixas": [
+    45.71,
+    54.35,
+    66.62,
+    78.26,
+    87.19
+   ],
+   "fpk": 1.37,
+   "fvPct": 0.49
+  },
+  {
+   "regiao": "Interior de SC 1",
+   "uf": "SC",
+   "faixas": [
+    50.29,
+    59.8,
+    73.28,
+    86.06,
+    95.89
+   ],
+   "fpk": 1.49,
+   "fvPct": 0.49
+  },
+  {
+   "regiao": "Interior de SC 2",
+   "uf": "SC",
+   "faixas": [
+    54.34,
+    64.63,
+    79.21,
+    93.08,
+    103.67
+   ],
+   "fpk": 1.6,
+   "fvPct": 0.51
+  },
+  {
+   "regiao": "Brasilia e Todo Df",
+   "uf": "DF",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Goiania e Regiao Metropolitana",
+   "uf": "GO",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de GO 1",
+   "uf": "GO",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91,
+   "txa": 69.02
+  },
+  {
+   "regiao": "Interior de GO 2",
+   "uf": "GO",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95,
+   "txa": 69.02
+  },
+  {
+   "regiao": "Interior de GO 3",
+   "uf": "GO",
+   "faixas": [
+    82.79,
+    98.42,
+    120.65,
+    141.72,
+    157.86
+   ],
+   "fpk": 2.45,
+   "fvPct": 1.02,
+   "txa": 69.02
+  },
+  {
+   "regiao": "Campo Grande",
+   "uf": "MS",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de MS 1",
+   "uf": "MS",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de MS 2",
+   "uf": "MS",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de MS 3",
+   "uf": "MS",
+   "faixas": [
+    100.31,
+    119.25,
+    146.19,
+    171.7,
+    191.27
+   ],
+   "fpk": 2.98,
+   "fvPct": 1.24,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Cuiaba",
+   "uf": "MT",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de MT 1",
+   "uf": "MT",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de MT 2",
+   "uf": "MT",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de MT 3",
+   "uf": "MT",
+   "faixas": [
+    100.31,
+    119.25,
+    146.19,
+    171.7,
+    191.27
+   ],
+   "fpk": 2.98,
+   "fvPct": 1.24,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Salvador",
+   "uf": "BA",
+   "faixas": [
+    64.63,
+    76.86,
+    94.22,
+    110.68,
+    123.28
+   ],
+   "fpk": 1.92,
+   "fvPct": 0.91
+  },
+  {
+   "regiao": "Interior de BA 1",
+   "uf": "BA",
+   "faixas": [
+    71.1,
+    84.54,
+    103.63,
+    121.75,
+    135.61
+   ],
+   "fpk": 2.1,
+   "fvPct": 1.02,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de BA 2",
+   "uf": "BA",
+   "faixas": [
+    76.86,
+    91.38,
+    112.04,
+    131.6,
+    146.58
+   ],
+   "fpk": 2.27,
+   "fvPct": 1.06,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de BA 3",
+   "uf": "BA",
+   "faixas": [
+    108.5,
+    129.0,
+    158.14,
+    185.77,
+    206.92
+   ],
+   "fpk": 3.24,
+   "fvPct": 1.42,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Aracaju",
+   "uf": "SE",
+   "faixas": [
+    66.11,
+    78.61,
+    96.36,
+    113.19,
+    126.07
+   ],
+   "fpk": 1.97,
+   "fvPct": 0.95
+  },
+  {
+   "regiao": "Interior de SE 1",
+   "uf": "SE",
+   "faixas": [
+    72.73,
+    86.47,
+    105.99,
+    124.49,
+    138.69
+   ],
+   "fpk": 2.17,
+   "fvPct": 1.05,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de SE 2",
+   "uf": "SE",
+   "faixas": [
+    78.59,
+    93.47,
+    114.58,
+    134.58,
+    149.93
+   ],
+   "fpk": 2.36,
+   "fvPct": 1.08,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de SE 3",
+   "uf": "SE",
+   "faixas": [
+    107.95,
+    128.33,
+    157.36,
+    184.84,
+    205.87
+   ],
+   "fpk": 3.22,
+   "fvPct": 1.42,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Maceio",
+   "uf": "AL",
+   "faixas": [
+    67.14,
+    79.82,
+    97.88,
+    114.96,
+    128.07
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.99
+  },
+  {
+   "regiao": "Interior de AL 1",
+   "uf": "AL",
+   "faixas": [
+    73.85,
+    87.84,
+    107.65,
+    126.46,
+    140.87
+   ],
+   "fpk": 2.19,
+   "fvPct": 1.07,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de AL 2",
+   "uf": "AL",
+   "faixas": [
+    79.84,
+    94.93,
+    116.37,
+    136.69,
+    152.27
+   ],
+   "fpk": 2.38,
+   "fvPct": 1.11,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de AL 3",
+   "uf": "AL",
+   "faixas": [
+    109.63,
+    130.38,
+    159.8,
+    187.75,
+    209.13
+   ],
+   "fpk": 3.26,
+   "fvPct": 1.46,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Recife",
+   "uf": "PE",
+   "faixas": [
+    68.82,
+    81.84,
+    100.32,
+    117.86,
+    131.27
+   ],
+   "fpk": 2.04,
+   "fvPct": 1.04
+  },
+  {
+   "regiao": "Cidade Fernando de Noronha",
+   "uf": "PE",
+   "faixas": [
+    82.6,
+    98.23,
+    120.38,
+    141.4,
+    157.51
+   ],
+   "fpk": 2.45,
+   "fvPct": 1.14,
+   "txaKg": 14.95,
+   "taxaExtra": 51.78
+  },
+  {
+   "regiao": "Interior de PE 1",
+   "uf": "PE",
+   "faixas": [
+    75.7,
+    90.02,
+    110.36,
+    129.63,
+    144.41
+   ],
+   "fpk": 2.24,
+   "fvPct": 1.14,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de PE 2",
+   "uf": "PE",
+   "faixas": [
+    81.83,
+    97.32,
+    119.28,
+    140.13,
+    156.07
+   ],
+   "fpk": 2.42,
+   "fvPct": 1.17,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Interior de PE 3",
+   "uf": "PE",
+   "faixas": [
+    112.41,
+    133.68,
+    163.85,
+    192.43,
+    214.36
+   ],
+   "fpk": 3.33,
+   "fvPct": 1.56,
+   "txa": 49.3
+  },
+  {
+   "regiao": "Joao Pessoa",
+   "uf": "PB",
+   "faixas": [
+    69.68,
+    82.84,
+    101.55,
+    119.3,
+    132.87
+   ],
+   "fpk": 2.07,
+   "fvPct": 1.05
+  },
+  {
+   "regiao": "Interior de PB 1",
+   "uf": "PB",
+   "faixas": [
+    76.64,
+    91.12,
+    111.72,
+    131.19,
+    146.19
+   ],
+   "fpk": 2.28,
+   "fvPct": 1.16,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de PB 2",
+   "uf": "PB",
+   "faixas": [
+    82.84,
+    98.5,
+    120.74,
+    141.84,
+    157.99
+   ],
+   "fpk": 2.47,
+   "fvPct": 1.21,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de PB 3",
+   "uf": "PB",
+   "faixas": [
+    113.77,
+    135.28,
+    165.87,
+    194.84,
+    217.0
+   ],
+   "fpk": 3.39,
+   "fvPct": 1.58,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Natal",
+   "uf": "RN",
+   "faixas": [
+    70.92,
+    84.34,
+    103.42,
+    121.43,
+    135.28
+   ],
+   "fpk": 2.1,
+   "fvPct": 1.07
+  },
+  {
+   "regiao": "Interior de RN 1",
+   "uf": "RN",
+   "faixas": [
+    78.03,
+    92.78,
+    113.73,
+    133.61,
+    148.79
+   ],
+   "fpk": 2.33,
+   "fvPct": 1.19,
+   "txa": 73.95
+  },
+  {
+   "regiao": "Interior de RN 2",
+   "uf": "RN",
+   "faixas": [
+    84.33,
+    100.28,
+    122.92,
+    144.41,
+    160.86
+   ],
+   "fpk": 2.5,
+   "fvPct": 1.23,
+   "txa": 73.95
+  },
+  {
+   "regiao": "Interior de RN 3",
+   "uf": "RN",
+   "faixas": [
+    115.85,
+    137.71,
+    168.85,
+    198.32,
+    220.92
+   ],
+   "fpk": 3.44,
+   "fvPct": 1.62,
+   "txa": 73.95
+  },
+  {
+   "regiao": "Fortaleza",
+   "uf": "CE",
+   "faixas": [
+    71.58,
+    85.12,
+    104.32,
+    122.54,
+    136.5
+   ],
+   "fpk": 2.11,
+   "fvPct": 1.13
+  },
+  {
+   "regiao": "Interior de CE 1",
+   "uf": "CE",
+   "faixas": [
+    78.71,
+    93.6,
+    114.75,
+    134.79,
+    150.13
+   ],
+   "fpk": 2.35,
+   "fvPct": 1.22,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de CE 2",
+   "uf": "CE",
+   "faixas": [
+    85.12,
+    101.2,
+    124.02,
+    145.68,
+    162.3
+   ],
+   "fpk": 2.53,
+   "fvPct": 1.27,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de CE 3",
+   "uf": "CE",
+   "faixas": [
+    120.12,
+    142.84,
+    175.11,
+    205.65,
+    229.1
+   ],
+   "fpk": 3.56,
+   "fvPct": 1.71,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Teresina",
+   "uf": "PI",
+   "faixas": [
+    68.37,
+    81.29,
+    99.64,
+    117.04,
+    130.39
+   ],
+   "fpk": 2.04,
+   "fvPct": 1.02
+  },
+  {
+   "regiao": "Interior de PI 1",
+   "uf": "PI",
+   "faixas": [
+    75.19,
+    89.41,
+    109.63,
+    128.76,
+    143.42
+   ],
+   "fpk": 2.21,
+   "fvPct": 1.13,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de PI 2",
+   "uf": "PI",
+   "faixas": [
+    81.29,
+    96.67,
+    118.47,
+    139.18,
+    155.04
+   ],
+   "fpk": 2.41,
+   "fvPct": 1.16,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de PI 3",
+   "uf": "PI",
+   "faixas": [
+    114.72,
+    136.43,
+    167.25,
+    196.45,
+    218.82
+   ],
+   "fpk": 3.4,
+   "fvPct": 1.58,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Sao Luis",
+   "uf": "MA",
+   "faixas": [
+    70.16,
+    83.46,
+    102.29,
+    120.14,
+    133.85
+   ],
+   "fpk": 2.08,
+   "fvPct": 1.06
+  },
+  {
+   "regiao": "Interior de MA 1",
+   "uf": "MA",
+   "faixas": [
+    77.21,
+    91.77,
+    112.52,
+    132.15,
+    147.23
+   ],
+   "fpk": 2.32,
+   "fvPct": 1.17,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de MA 2",
+   "uf": "MA",
+   "faixas": [
+    83.45,
+    99.2,
+    121.61,
+    142.86,
+    159.15
+   ],
+   "fpk": 2.48,
+   "fvPct": 1.22,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Interior de MA 3",
+   "uf": "MA",
+   "faixas": [
+    117.76,
+    140.04,
+    171.7,
+    201.66,
+    224.63
+   ],
+   "fpk": 3.5,
+   "fvPct": 1.65,
+   "txa": 59.16
+  },
+  {
+   "regiao": "Palmas",
+   "uf": "TO",
+   "faixas": [
+    61.41,
+    73.02,
+    89.51,
+    105.16,
+    117.12
+   ],
+   "fpk": 1.82,
+   "fvPct": 0.84
+  },
+  {
+   "regiao": "Interior de TO 1",
+   "uf": "TO",
+   "faixas": [
+    67.56,
+    80.33,
+    98.46,
+    115.66,
+    128.83
+   ],
+   "fpk": 2.01,
+   "fvPct": 0.91,
+   "txa": 92.03
+  },
+  {
+   "regiao": "Interior de TO 2",
+   "uf": "TO",
+   "faixas": [
+    73.02,
+    86.82,
+    106.44,
+    125.04,
+    139.26
+   ],
+   "fpk": 2.18,
+   "fvPct": 0.95,
+   "txa": 92.03
+  },
+  {
+   "regiao": "Interior de TO 3",
+   "uf": "TO",
+   "faixas": [
+    110.63,
+    131.54,
+    161.24,
+    189.39,
+    210.98
+   ],
+   "fpk": 3.29,
+   "fvPct": 1.38,
+   "txa": 92.03
+  },
+  {
+   "regiao": "Manaus",
+   "uf": "AM",
+   "faixas": [
+    75.99,
+    90.39,
+    110.8,
+    130.14,
+    144.97
+   ],
+   "fpk": 2.27,
+   "fvPct": 1.23
+  },
+  {
+   "regiao": "Interior de AM 1",
+   "uf": "AM",
+   "faixas": [
+    83.62,
+    99.43,
+    121.87,
+    143.18,
+    159.46
+   ],
+   "fpk": 2.5,
+   "fvPct": 1.34,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de AM 2",
+   "uf": "AM",
+   "faixas": [
+    90.38,
+    107.47,
+    131.74,
+    154.76,
+    172.38
+   ],
+   "fpk": 2.68,
+   "fvPct": 1.4,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de AM 3",
+   "uf": "AM",
+   "faixas": [
+    136.91,
+    162.82,
+    199.57,
+    234.43,
+    261.13
+   ],
+   "fpk": 4.07,
+   "fvPct": 2.03,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Porto Velho",
+   "uf": "RO",
+   "faixas": [
+    70.77,
+    84.18,
+    103.18,
+    121.21,
+    135.0
+   ],
+   "fpk": 2.1,
+   "fvPct": 1.07,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de RO 1",
+   "uf": "RO",
+   "faixas": [
+    77.86,
+    92.6,
+    113.49,
+    133.31,
+    148.5
+   ],
+   "fpk": 2.33,
+   "fvPct": 1.19,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de RO 2",
+   "uf": "RO",
+   "faixas": [
+    84.17,
+    100.06,
+    122.69,
+    144.11,
+    160.55
+   ],
+   "fpk": 2.5,
+   "fvPct": 1.23,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de RO 3",
+   "uf": "RO",
+   "faixas": [
+    127.52,
+    151.6,
+    185.84,
+    218.28,
+    243.17
+   ],
+   "fpk": 3.78,
+   "fvPct": 1.78,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Rio Branco",
+   "uf": "AC",
+   "faixas": [
+    59.81,
+    71.14,
+    87.2,
+    102.41,
+    114.08
+   ],
+   "fpk": 1.77,
+   "fvPct": 0.54,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de AC 1",
+   "uf": "AC",
+   "faixas": [
+    65.8,
+    78.25,
+    95.91,
+    112.65,
+    125.48
+   ],
+   "fpk": 1.95,
+   "fvPct": 0.6,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de AC 2",
+   "uf": "AC",
+   "faixas": [
+    71.1,
+    84.57,
+    103.67,
+    121.75,
+    135.64
+   ],
+   "fpk": 2.1,
+   "fvPct": 0.62,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de AC 3",
+   "uf": "AC",
+   "faixas": [
+    107.72,
+    128.1,
+    157.03,
+    184.48,
+    205.48
+   ],
+   "fpk": 3.22,
+   "fvPct": 0.9,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Boa Vista",
+   "uf": "RR",
+   "faixas": [
+    59.57,
+    70.82,
+    86.84,
+    102.01,
+    113.59
+   ],
+   "fpk": 1.77,
+   "fvPct": 0.54,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de RR 1",
+   "uf": "RR",
+   "faixas": [
+    65.52,
+    77.91,
+    95.51,
+    112.19,
+    124.97
+   ],
+   "fpk": 1.95,
+   "fvPct": 0.6,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de RR 2",
+   "uf": "RR",
+   "faixas": [
+    70.84,
+    84.24,
+    103.23,
+    121.26,
+    135.1
+   ],
+   "fpk": 2.1,
+   "fvPct": 0.62,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de RR 3",
+   "uf": "RR",
+   "faixas": [
+    107.3,
+    127.59,
+    156.41,
+    183.74,
+    204.63
+   ],
+   "fpk": 3.19,
+   "fvPct": 0.9,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Macapa",
+   "uf": "AP",
+   "faixas": [
+    69.83,
+    83.03,
+    101.79,
+    119.56,
+    133.18
+   ],
+   "fpk": 2.07,
+   "fvPct": 1.06,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de AP 1",
+   "uf": "AP",
+   "faixas": [
+    76.81,
+    91.34,
+    111.96,
+    131.53,
+    146.52
+   ],
+   "fpk": 2.28,
+   "fvPct": 1.16,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de AP 2",
+   "uf": "AP",
+   "faixas": [
+    83.04,
+    98.73,
+    121.03,
+    142.15,
+    158.34
+   ],
+   "fpk": 2.47,
+   "fvPct": 1.21,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Interior de AP 3",
+   "uf": "AP",
+   "faixas": [
+    125.79,
+    149.56,
+    183.33,
+    215.37,
+    239.88
+   ],
+   "fpk": 3.73,
+   "fvPct": 1.75,
+   "txa": 98.59
+  },
+  {
+   "regiao": "Belem e Reg. Metropolitana",
+   "uf": "PA",
+   "faixas": [
+    69.83,
+    83.03,
+    101.79,
+    119.56,
+    133.18
+   ],
+   "fpk": 2.07,
+   "fvPct": 1.06
+  },
+  {
+   "regiao": "Interior de PA 1",
+   "uf": "PA",
+   "faixas": [
+    76.81,
+    91.34,
+    111.96,
+    131.53,
+    146.52
+   ],
+   "fpk": 2.28,
+   "fvPct": 1.16,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de PA 2",
+   "uf": "PA",
+   "faixas": [
+    83.04,
+    98.73,
+    121.03,
+    142.15,
+    158.34
+   ],
+   "fpk": 2.47,
+   "fvPct": 1.21,
+   "txa": 78.87
+  },
+  {
+   "regiao": "Interior de PA 3",
+   "uf": "PA",
+   "faixas": [
+    125.79,
+    149.56,
+    183.33,
+    215.37,
+    239.88
+   ],
+   "fpk": 3.73,
+   "fvPct": 1.75,
+   "txa": 78.87
+  }
+ ]
+}

@@ -1,0 +1,241 @@
+{
+ "id": "tjb",
+ "transportadora": "TJB Transportes e Logística",
+ "origem": "RS – Capital e Metropolitana",
+ "fonte": "Tabela - Origem RS pré aprovada.xlsx",
+ "vigencia": "não informada",
+ "modelo": "faixas",
+ "limites": [
+  10,
+  20,
+  30,
+  50,
+  100
+ ],
+ "cubagem": 300,
+ "gris": {
+  "pct": 0.3,
+  "min": 12.74
+ },
+ "pedagio": 6.579,
+ "fixas": [
+  {
+   "nome": "TAS (por CT-e)",
+   "valor": 9.74
+  },
+  {
+   "nome": "PSO (por CT-e)",
+   "valor": 4.85
+  },
+  {
+   "nome": "Despacho (acima de 100 kg)",
+   "valor": 27.41,
+   "pesoAcima": 100
+  }
+ ],
+ "pctFrete": [
+  {
+   "nome": "Taxa de entrega",
+   "pct": 7.5,
+   "min": 0
+  },
+  {
+   "nome": "TEC – emergencial combustível 2026",
+   "pct": 7.5,
+   "min": 0
+  },
+  {
+   "nome": "EMEX/TAR (RJ)",
+   "pct": 20,
+   "min": 32.89,
+   "uf": "RJ"
+  }
+ ],
+ "opcionais": [
+  {
+   "id": "tde",
+   "nome": "TDE – capital/metropolitana",
+   "pct": 20,
+   "min": 326.83
+  },
+  {
+   "id": "tdei",
+   "nome": "TDE – interior",
+   "pct": 20,
+   "min": 375.18
+  },
+  {
+   "id": "trt",
+   "nome": "TRT – restrição de trânsito",
+   "pct": 20,
+   "min": 54.82
+  },
+  {
+   "id": "tag",
+   "nome": "TAG – agendamento",
+   "valor": 16.44
+  }
+ ],
+ "rotas": [
+  {
+   "regiao": "SP – Região Capital e Metropoliana",
+   "uf": "SP",
+   "faixas": [
+    65.23,
+    72.48,
+    80.54,
+    89.49,
+    99.43
+   ],
+   "ton": 608.21,
+   "fvPct": 0.3
+  },
+  {
+   "regiao": "SP – Interior I",
+   "uf": "SP",
+   "faixas": [
+    87.52,
+    92.13,
+    96.98,
+    102.08,
+    107.46
+   ],
+   "ton": 672.68,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "SP – Interior II",
+   "uf": "SP",
+   "faixas": [
+    101.1,
+    106.15,
+    111.46,
+    117.03,
+    122.88
+   ],
+   "ton": 1094.53,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "RJ – Capital e Metropolitana",
+   "uf": "RJ",
+   "faixas": [
+    75.02,
+    83.36,
+    92.62,
+    102.91,
+    109.37
+   ],
+   "ton": 699.45,
+   "fvPct": 0.3
+  },
+  {
+   "regiao": "RJ – Interior",
+   "uf": "RJ",
+   "faixas": [
+    111.21,
+    116.77,
+    122.61,
+    128.74,
+    135.17
+   ],
+   "ton": 1203.98,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "ES – Capital e Metropolitana",
+   "uf": "ES",
+   "faixas": [
+    82.52,
+    91.69,
+    101.88,
+    113.2,
+    120.31
+   ],
+   "ton": 769.39,
+   "fvPct": 0.3
+  },
+  {
+   "regiao": "ES – Interior",
+   "uf": "ES",
+   "faixas": [
+    122.33,
+    128.44,
+    134.87,
+    141.61,
+    148.69
+   ],
+   "ton": 1324.38,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "PR – Capital e Metropolitana",
+   "uf": "PR",
+   "faixas": [
+    57.58,
+    67.18,
+    76.77,
+    86.36,
+    95.97
+   ],
+   "ton": 603.96,
+   "fvPct": 0.3
+  },
+  {
+   "regiao": "PR – Interior",
+   "uf": "PR",
+   "faixas": [
+    86.96,
+    95.66,
+    105.22,
+    115.74,
+    127.32
+   ],
+   "ton": 912.09,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "SC – Itajaí e região",
+   "uf": "SC",
+   "faixas": [
+    50.07,
+    58.42,
+    66.76,
+    75.1,
+    83.45
+   ],
+   "ton": 525.18,
+   "fvPct": 0.3
+  },
+  {
+   "regiao": "SC – Interior I",
+   "uf": "SC",
+   "faixas": [
+    68.74,
+    75.62,
+    83.18,
+    91.5,
+    100.65
+   ],
+   "ton": 667.29,
+   "fvPct": 0.4
+  },
+  {
+   "regiao": "SC – Interior II",
+   "uf": "SC",
+   "faixas": [
+    79.06,
+    86.96,
+    95.66,
+    105.22,
+    115.74
+   ],
+   "ton": 829.17,
+   "fvPct": 0.4
+  }
+ ],
+ "mapa": "tjb",
+ "acima": "ton",
+ "pctSubtotal": [],
+ "semTarifa": "A lista de cidades da TJB inclui o RS, mas a tabela recebida não tem tarifa para destinos no RS."
+}
