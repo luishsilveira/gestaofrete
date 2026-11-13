@@ -12,6 +12,7 @@ package.json                              dependências do servidor (driver Post
 src/index.js                              servidor: API do histórico de cotações e do Bling (/api/*)
 src/bling.js                              integração com o Bling (OAuth, tokens, chamadas à API)
 src/sync.js                               importação do Bling (pedidos, propostas, NF-e, produtos e kits)
+src/braspress.js                          cotação online da Braspress (API)
 public/index.html                         página
 public/css/app.css                        estilos
 public/js/app.js                          motor de cálculo e telas
@@ -49,6 +50,17 @@ public/_headers                           cache (dados sempre atualizados)
   - `POST /api/cotacoes`: salva uma cotação
   - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
   - `GET /api/cotacoes/{id}`: detalhe completo
+
+## Braspress: cotação online (API)
+
+Além da tabela, a calculadora consulta a API da Braspress (`POST https://api.braspress.com/v1/cotacao/calcular/json`, autenticação Basic) e mostra o resultado como "Braspress (cotação online)", com prazo, nº da cotação e a diferença para a tabela.
+
+- **Credenciais:** secret `BRASPRESS_CONTAS` no Cloudflare (tipo Secret), JSON com uma conta por CNPJ: `[{"cnpj":"…","usuario":"…_PRD","senha":"…"}]`. Campos opcionais: `"cepOrigem"` e `"nome"`. Sem `cepOrigem`, o CEP vem do cadastro do CNPJ (BrasilAPI), guardado em `braspress_contas`.
+- **Remetente:** a calculadora mostra a lista de CNPJs. O padrão é `BRASPRESS_CNPJ_PADRAO` (variável opcional), ou o CNPJ de Nova Santa Rita, ou o primeiro.
+- **Requisição:** CIF (`tipoFrete` 1), rodoviário, CEP de destino, valor da NF, peso, volumes e dimensões (ou um cubo equivalente ao m³). Destinatário: CPF/CNPJ do pedido do Bling ou digitado; sem ele, vai um CPF genérico não cadastrado e a Braspress cota só pelo CEP.
+- **Cache e registro:** a cotação vale até 23:59 do dia; a mesma consulta no mesmo dia não chama a Braspress de novo. Todas as consultas (inclusive erros) ficam em `braspress_cotacoes`.
+- **API interna:** `GET /api/braspress/status` · `POST /api/braspress/cotar`.
+- **Testes:** `node tests/braspress.test.mjs` (Braspress simulada, PostgreSQL local).
 
 ## Valores cotados manualmente (divergências)
 

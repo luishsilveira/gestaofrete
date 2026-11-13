@@ -46,6 +46,11 @@
 <div><label>Alt. (m)</label><input id="a" type="number" value="0.55" step="0.01"></div>
 </div>
 <label>Qtd. de volumes com essas dimensões</label><input id="qv" type="number" value="1" min="1">
+<div id="bp_cfg" class="hide">
+<h2 style="margin-top:18px">Braspress online</h2>
+<label>Remetente</label><select id="bp_rem"></select>
+<label>CPF/CNPJ do destinatário (opcional)</label><input id="bp_dest" inputmode="numeric" maxlength="18" placeholder="sem ele, a Braspress cota só pelo CEP">
+</div>
 <h2 style="margin-top:18px">Regras</h2>
 <label>Coluna "Tonelada" (Trânsito Brasil, TJB)</label>
 <div class="mode" id="tonmode"><button data-m="exc" class="on">Excedente sobre última faixa</button><button data-m="tot">Peso total (mín. última faixa)</button></div>

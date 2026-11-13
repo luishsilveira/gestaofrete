@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.5';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.6';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -203,8 +203,15 @@ function calc(){
     const r=t.rotas[rv.i];
     if(t.id==='tjb') op.int=/interior/i.test(r.regiao);
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
+  const bpReq=BP.contas?reqBraspress(peso,nf,m3):null, bpChave=bpReq?JSON.stringify(bpReq):null;
+  if(bpReq&&BP.res&&BP.res.chave===bpChave&&BP.res.ok){ const x=BP.res, tb=res.find(r=>r.t.id==='bp');
+    res.push({t:{id:'bp-api',transportadora:'Braspress (cotação online)'},r:{regiao:'cotação online',prazo:x.prazo},
+      rv:{prazo:x.prazo,txt:'API Braspress',fonte:'api'},pT:pt,total:x.totalFrete,sub:x.totalFrete,icms:0,al:0,api:true,
+      it:[{n:'Frete total informado pela Braspress',d:`cotação nº ${x.id||'—'} · válida até 23:59 de hoje${x.remetente?' · remetente '+x.remetente:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:x.totalFrete}].concat(
+        tb?[{n:'Diferença para a tabela Braspress (só informativo)',d:`pela tabela: ${brl(tb.total)}`,v:x.totalFrete-tb.total}]:[])}); }
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
+  if(bpReq) agendarBraspress(bpReq,bpChave);
   $('salvar').classList.toggle('hide',!res.length||!API_OK);
   { const sel=$('s_transp'), ant=sel.value;
     sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
@@ -221,12 +228,12 @@ function calc(){
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
     if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>n.t.transportadora).join(', ')}</div>`;
-    $('out').innerHTML=h; return;
+    $('out').innerHTML=h+bpStatus(bpChave); return;
   }
   let h=res.map((x,k)=>{
     const dif=k?` <small>+${brl(x.total-res[0].total)} (${((x.total/res[0].total-1)*100).toFixed(1)}%)</small>`:'<small>menor preço</small>';
     const prazo=x.rv.prazo||x.r.prazo;
-    const bcls={lista:'b-lista',cap:'b-cap',man:'b-man'}[x.rv.fonte];
+    const bcls={lista:'b-lista',cap:'b-cap',man:'b-man',api:'b-api'}[x.rv.fonte];
     return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
       <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}</span></div>
       <div class="val">${brl(x.total)}${dif}</div></div>
@@ -234,12 +241,12 @@ function calc(){
       ${x.pT!==pt?`<div class="small" style="margin:8px 0">Peso taxado nesta transportadora: <b>${x.pT.toLocaleString('pt-BR')} kg</b> (isenta de cubagem até ${x.t.isentoCubM3.toLocaleString('pt-BR')} m³)</div>`:''}
       <table><tr><th>Componente</th><th>Base</th><th class="n">Valor</th></tr>
       ${x.it.map(i=>`<tr><td>${i.n}</td><td class="small">${i.d}</td><td class="n">${brl(i.v)}</td></tr>`).join('')}
-      <tr><td>Subtotal</td><td></td><td class="n">${brl(x.sub)}</td></tr>
+      ${x.api?'':`<tr><td>Subtotal</td><td></td><td class="n">${brl(x.sub)}</td></tr>`}
       ${x.icms?`<tr><td>ICMS</td><td class="small">${x.al}% por dentro</td><td class="n">${brl(x.icms)}</td></tr>`:''}
       <tr class="tot"><td>Total</td><td></td><td class="n">${brl(x.total)}</td></tr></table></div></div>`;}).join('');
   if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
   if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>`<b>${n.t.transportadora}</b> – ${n.msg}`).join('<br>')}</div>`;
-  $('out').innerHTML=h;
+  $('out').innerHTML=h+bpStatus(bpChave);
   $('out').querySelectorAll('.rh').forEach(e=>e.onclick=()=>e.parentNode.classList.toggle('open'));
   $('out').querySelectorAll('.det select').forEach(s=>{ s.onclick=e=>e.stopPropagation(); s.onchange=()=>{override[s.dataset.t]=+s.value;calc();}; });
   const b=$('out').querySelector('.r'); if(b) b.classList.add('open');
@@ -252,7 +259,41 @@ function calc(){
 }
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
-['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal'].forEach(id=>$(id).addEventListener('input',calc));
+['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','bp_rem','bp_dest'].forEach(id=>$(id).addEventListener('input',calc));
+
+// ---------- Braspress: cotação online ----------
+const BP={contas:null,res:null,pend:null,timer:null};
+function reqBraspress(peso,nf,m3){
+  const cep=String(dest.cep||'').replace(/\D/g,'').padStart(8,'0');
+  if(!dest.cep||cep.length!==8||!(peso>0)||!(nf>0)) return null;
+  const c=+$('c').value, l=+$('l').value, a=+$('a').value, qv=+$('qv').value||1;
+  return {cepDestino:cep,peso,vlrMercadoria:nf,volumes:qv,m3:(c*l*a>0)?null:m3,
+    cubagem:c*l*a>0?[{comprimento:c,largura:l,altura:a,volumes:qv}]:[],cnpjRemetente:$('bp_rem').value,cnpjDestinatario:$('bp_dest').value.replace(/\D/g,'')};
+}
+function agendarBraspress(req,chave){
+  if((BP.res&&BP.res.chave===chave)||BP.pend===chave) return;
+  clearTimeout(BP.timer); BP.pend=chave;
+  BP.timer=setTimeout(async()=>{
+    let r;
+    try{ r={...await api('/api/braspress/cotar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(req)}),ok:true}; }
+    catch(e){ r={ok:false,erro:e.message}; }
+    if(BP.pend!==chave) return;
+    BP.pend=null; BP.res={...r,chave}; calc();
+  },900);
+}
+function bpStatus(chave){
+  if(!BP.contas||!chave) return '';
+  if(BP.pend===chave) return '<div class="na">Consultando a cotação online da Braspress…</div>';
+  if(BP.res&&BP.res.chave===chave&&!BP.res.ok) return `<div class="na"><b>Braspress online</b> – ${esc(BP.res.erro)}</div>`;
+  return '';
+}
+async function iniciarBraspress(){
+  try{ const s=await api('/api/braspress/status'); if(!s.configurado||!s.contas.length) return;
+    BP.contas=s.contas;
+    $('bp_rem').innerHTML=s.contas.map(c=>`<option value="${c.cnpj}" ${c.padrao?'selected':''}>${esc(c.razao_social||'CNPJ')} – ${c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}${c.cidade?' ('+esc(c.cidade)+'/'+esc(c.uf)+')':''}</option>`).join('');
+    $('bp_cfg').classList.remove('hide'); calc();
+  }catch(e){ /* sem API */ }
+}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','ped','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico(); if(b.dataset.t==='ped') mudarRecurso(REC);});
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
@@ -294,7 +335,7 @@ const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
-api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); iniciarBling(); })
+api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); iniciarBling(); iniciarBraspress(); })
   .catch(()=>{ API_OK=false; });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
@@ -412,7 +453,7 @@ function preencherPedido(p){
     else if(p.pesoItens>0&&Math.abs(p.pesoItens-p.pesoBruto)>Math.max(1,p.pesoBruto*0.05)) avisos.push(`peso pelos itens é ${p.pesoItens.toLocaleString('pt-BR')} kg, diferente do peso do pedido`);
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;
-    $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero;
+    $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero; $('bp_dest').value=p.documento||'';
     $('b_status').innerHTML=`<b>${p.tipo==='proposta'?'Proposta':'Pedido'} ${esc(p.numero)}</b>${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
       `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
       `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
@@ -528,7 +569,7 @@ async function detalheItens(tipoLista,x,tr){
 function cotarDoc(r,p){
   document.querySelector('nav button[data-t=calc]').click();
   const pesoPedido=+p.peso_bruto||0, pesoItens=+p.peso_calculado||0;
-  preencherPedido({tipo:r==='propostas'?'proposta':'pedido',id:p.id,numero:p.numero,cliente:p.cliente,cep:p.cep,origemCep:p.origem_cep,
+  preencherPedido({tipo:r==='propostas'?'proposta':'pedido',id:p.id,numero:p.numero,cliente:p.cliente,documento:p.documento,cep:p.cep,origemCep:p.origem_cep,
     pesoBruto:pesoPedido||pesoItens||null,origemPeso:pesoPedido?'pedido':pesoItens?'itens':'',pesoItens:pesoItens||null,
     volumes:+p.volumes||null,valorProdutos:+p.valor_produtos||null,valorTotal:+p.valor_total||null,freteAtual:+(p.frete_bling||p.frete)||null,canal:p.canal});
   window.scrollTo({top:0,behavior:'smooth'});

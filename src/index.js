@@ -6,6 +6,7 @@
 
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
+import { SCHEMA_BRASPRESS, BraspressErro, contasBraspress, infoContas, cotarBraspress } from './braspress.js';
 import { SCHEMA_DOCS, buscarPedido, gravarPedidos, sincronizarTudo } from './sync.js';
 
 const SCHEMA = `
@@ -76,6 +77,7 @@ async function comBanco(env, ctx, fn) {
       await client.query(SCHEMA_BLING);
       await client.query(SCHEMA_DOCS);
       await client.query(SCHEMA_MANUAL);
+      await client.query(SCHEMA_BRASPRESS);
       esquemaPronto = true;
     }
     return await fn(client);
@@ -477,10 +479,20 @@ export default {
       const mv = url.pathname.match(/^\/api\/manuais\/(\d+)$/);
       if (mv && (request.method === 'DELETE' || request.method === 'PATCH')) return await alterarManual(mv[1], request, env, ctx);
       if (url.pathname === '/api/divergencias' && request.method === 'GET') return await divergencias(url, env, ctx);
+      if (url.pathname === '/api/braspress/status') {
+        if (!contasBraspress(env).length) return json({ configurado: false });
+        const contas = await comBanco(env, ctx, (db) => infoContas(env, db));
+        return json({ configurado: true, contas: contas.map(({ usuario, senha, ...c }) => c) });
+      }
+      if (url.pathname === '/api/braspress/cotar' && request.method === 'POST') {
+        let d; try { d = await request.json(); } catch { return json({ erro: 'Corpo da requisição inválido.' }, 400); }
+        return json(await comBanco(env, ctx, (db) => cotarBraspress(env, db, d, usuario)));
+      }
       if (url.pathname === '/api/motivos') return json({ motivos: MOTIVOS });
       return json({ erro: 'Rota não encontrada.' }, 404);
     } catch (e) {
       if (e instanceof BlingErro) return json({ erro: e.message, codigo: e.codigo }, e.status);
+      if (e instanceof BraspressErro) return json({ erro: e.message }, e.status === 401 ? 502 : e.status);
       console.error('Erro na API', url.pathname, e);
       return json({ erro: 'Erro ao acessar o banco de dados.', detalhe: String(e && e.message || e) }, 500);
     }
