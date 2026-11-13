@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.3';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.4';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -252,7 +252,7 @@ function calc(){
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal'].forEach(id=>$(id).addEventListener('input',calc));
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','ped','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico(); if(b.dataset.t==='ped') carregarPedidos();});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','ped','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico(); if(b.dataset.t==='ped') mudarRecurso(REC);});
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
 function renderTab(){
@@ -307,7 +307,7 @@ $('s_btn').onclick=async()=>{
     sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
-  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo.bling_pedido_id=BLING_PED.id;
+  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[BLING_PED.tipo==='proposta'?'bling_proposta_id':'bling_pedido_id']=BLING_PED.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
     $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva.`;
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
@@ -340,6 +340,7 @@ async function buscarPedidoBling(){
   const n=$('b_num').value.replace(/\D/g,''); if(!n) return;
   $('b_buscar').disabled=true; $('b_status').innerHTML='Buscando pedido no Bling…';
   try{ const p=await api('/api/bling/pedido?numero='+n);
+    if(!(p.pesoBruto>0)&&p.pesoItens>0){ p.pesoBruto=p.pesoItens; p.origemPeso='itens'; }
     preencherPedido(p);
   }catch(e){
     $('b_status').innerHTML='<span class="err">'+esc(e.message)+'</span>';
@@ -348,13 +349,15 @@ async function buscarPedidoBling(){
 }
 function preencherPedido(p){
     $('b_num').value=p.numero;
-    BLING_PED={id:p.id,numero:p.numero}; $('s_transp').dataset.escolhida='';
+    BLING_PED={tipo:p.tipo||'pedido',id:p.id,numero:String(p.numero)}; $('s_transp').dataset.escolhida='';
     const avisos=[];
-    if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('o pedido não tem peso bruto no Bling: informe o peso');
+    if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('sem peso no Bling (nem no documento nem nos produtos): informe o peso');
+    if(p.origemPeso==='itens') avisos.push('peso calculado pelos itens (peso dos produtos e componentes dos kits)');
+    else if(p.pesoItens>0&&Math.abs(p.pesoItens-p.pesoBruto)>Math.max(1,p.pesoBruto*0.05)) avisos.push(`peso pelos itens é ${p.pesoItens.toLocaleString('pt-BR')} kg, diferente do peso do pedido`);
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;
     $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero;
-    $('b_status').innerHTML=`<b>Pedido ${esc(p.numero)}</b>${p.cliente?' · '+esc(p.cliente):''}<br>`+
+    $('b_status').innerHTML=`<b>${p.tipo==='proposta'?'Proposta':'Pedido'} ${esc(p.numero)}</b>${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
       `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
       `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
       (p.cep?`<br>CEP ${fmtCep(+p.cep)} (${esc(p.origemCep)})`:'')+
@@ -363,46 +366,115 @@ function preencherPedido(p){
     else { $('b_status').innerHTML+='<br><span class="aviso">O pedido não tem CEP de entrega: informe o CEP.</span>'; calc(); }
 }
 
-// ---------- Pedidos importados do Bling ----------
+// ---------- Dados importados do Bling (pedidos, propostas, notas, produtos) ----------
 const dataBR=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('pt-BR'):'—';
 const horaBR=d=>d?new Date(d).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';
-let PEDIDOS=[]; let pTimer=null;
-$('p_busca').addEventListener('input',()=>{ clearTimeout(pTimer); pTimer=setTimeout(carregarPedidos,400); });
-$('p_filtro').onchange=carregarPedidos;
+const kg=v=>(+v||0)>0?(+v).toLocaleString('pt-BR',{maximumFractionDigits:3})+' kg':'—';
+const NOME_REC={pedidos:'Pedidos',propostas:'Propostas',notas:'Notas fiscais',produtos:'Produtos'};
+const FILTROS={
+  pedidos:[['','Todos'],['sem_cotacao','Sem cotação'],['sem_frete','Sem frete lançado no Bling'],['acima','Frete no Bling acima da cotação']],
+  propostas:[['','Todas'],['sem_cotacao','Sem cotação']],
+  notas:[['','Todas'],['autorizadas','Autorizadas'],['sem_pedido','Sem pedido ligado']],
+  produtos:[['','Todos'],['kits','Só kits (com estrutura)'],['sem_peso','Sem peso cadastrado']]};
+const BUSCA={pedidos:'Buscar por nº, nº da loja, cliente, cidade, CEP ou CPF/CNPJ',propostas:'Buscar por nº, cliente, cidade ou CEP',
+  notas:'Buscar por nº, cliente, cidade, CEP, transportadora ou chave',produtos:'Buscar por código ou nome'};
+let REC='pedidos', LISTA=[], pTimer=null;
+const canalTag=c=>{ c=c||'Venda direta'; const k=c==='Venda direta'?'cd':c==='Mercado Livre'?'ml':'mk'; return `<span class="canal canal-${k}">${esc(c)}</span>`; };
+const pesoDoc=d=>{ // peso do documento vs. peso calculado pelos itens
+  const calc=+d.peso_calculado||0, sem=+d.itens_sem_peso||0;
+  let h=calc>0?kg(calc):'<span class="aviso">—</span>';
+  if(sem>0) h+=`<br><span class="small aviso">${sem} item(ns) sem peso</span>`;
+  return h; };
+function mudarRecurso(r){
+  REC=r; document.querySelectorAll('#b_sub button').forEach(b=>b.classList.toggle('on',b.dataset.r===r));
+  $('p_filtro').innerHTML=FILTROS[r].map(([v,t])=>`<option value="${v}">${t}</option>`).join('');
+  $('p_canal').classList.toggle('hide',r!=='pedidos'); $('p_busca').placeholder=BUSCA[r]; $('p_busca').value='';
+  carregarBling();
+}
+document.querySelectorAll('#b_sub button').forEach(b=>b.onclick=()=>mudarRecurso(b.dataset.r));
+$('p_busca').addEventListener('input',()=>{ clearTimeout(pTimer); pTimer=setTimeout(carregarBling,400); });
+$('p_filtro').onchange=()=>carregarBling(); $('p_canal').onchange=()=>carregarBling();
 $('p_sync').onclick=async()=>{
   const b=$('p_sync'); b.disabled=true; $('p_status').textContent='Sincronizando com o Bling…';
-  try{ const r=await api('/api/bling/sincronizar',{method:'POST'}); BLING_SYNC={ultima_execucao:new Date().toISOString(),mensagem:r.mensagem}; await carregarPedidos(); }
+  try{ await api('/api/bling/sincronizar',{method:'POST'}); BLING_SYNC=null; await carregarBling(); }
   catch(e){ $('p_status').innerHTML='<span class="err">Erro ao sincronizar: '+esc(e.message)+'</span>'; }
   finally{ b.disabled=false; }
 };
-async function carregarPedidos(){
-  $('p_status').textContent='Carregando…';
+function textoSync(){
+  if(!BLING_SYNC) return 'Ainda não houve sincronização. A importação automática roda a cada 5 minutos.';
+  const rs=BLING_SYNC.recursos||[];
+  return `Última sincronização: ${horaBR(BLING_SYNC.ultima_execucao)}. `+(rs.length?rs.map(x=>`<b>${esc(NOME_REC[x.recurso]||x.recurso)}</b>: ${esc(x.mensagem||'—')}${x.ultimo_completo?'':' <span class="aviso">(importação inicial em andamento)</span>'}`).join(' · '):esc(BLING_SYNC.mensagem||''))+
+    ' A importação automática roda a cada 5 minutos.';
+}
+async function carregarBling(){
+  const r=REC; $('p_status').textContent='Carregando…'; $('p_det').innerHTML='';
   try{
     const q=new URLSearchParams({busca:$('p_busca').value.trim(),filtro:$('p_filtro').value,limite:'300'});
-    const [j,s]=await Promise.all([api('/api/bling/pedidos?'+q),api('/api/bling/status').catch(()=>null)]);
+    if(r==='pedidos'&&$('p_canal').value) q.set('canal',$('p_canal').value);
+    const [j,s]=await Promise.all([api(`/api/bling/${r}?`+q),api('/api/bling/status').catch(()=>null)]);
+    if(r!==REC) return;
     if(s&&s.sync) BLING_SYNC=s.sync;
-    PEDIDOS=j.pedidos;
-    const sync=BLING_SYNC?`Última sincronização: ${horaBR(BLING_SYNC.ultima_execucao)} – ${esc(BLING_SYNC.mensagem||'')} A importação automática roda a cada 5 minutos.`:'Ainda não houve sincronização. A importação automática roda a cada 5 minutos.';
-    $('p_status').innerHTML=`${PEDIDOS.length} pedido(s)${PEDIDOS.length===300?' (mostrando os 300 mais recentes)':''}. ${sync}`;
-    $('p_tab').innerHTML=PEDIDOS.length?'<tr><th>Nº</th><th>Data</th><th>Situação</th><th>Cliente</th><th>Destino</th><th class="n">Peso</th><th class="n">Valor</th><th class="n">Frete no Bling</th><th class="n">Cotação</th><th class="n">Diferença</th><th></th></tr>'+
-      PEDIDOS.map((p,i)=>{
-        const cot=p.cotacao_id?(+(p.valor_escolhido??p.melhor_valor)):null, fb=+p.frete_bling||0;
-        const dif=(cot!=null&&fb>0)?fb-cot:null;
-        return `<tr><td>${esc(p.numero)}</td><td>${dataBR(p.data)}</td><td class="small">${esc(p.situacao||(p.situacao_id!=null?'Situação '+p.situacao_id:'—'))}</td>
-        <td>${esc(p.cliente||'')}</td><td>${p.cidade?esc(p.cidade)+'/'+esc(p.uf):'<span class="aviso">sem CEP</span>'}</td>
-        <td class="n">${p.peso_bruto>0?(+p.peso_bruto).toLocaleString('pt-BR')+' kg':'<span class="aviso">—</span>'}</td>
-        <td class="n">${brl(+(p.valor_produtos||p.valor_total||0))}</td>
-        <td class="n">${fb>0?brl(fb):'<span class="small">não lançado</span>'}${p.transportadora_bling?`<br><span class="small">${esc(p.transportadora_bling)}</span>`:''}</td>
-        <td class="n">${cot!=null?brl(cot)+`<br><span class="small">${esc(p.transportadora_escolhida||p.melhor_transportadora||'')}</span>`:'<span class="small">sem cotação</span>'}</td>
-        <td class="n ${dif>0.01?'dif-pos':dif<-0.01?'dif-neg':''}">${dif!=null?(dif>0?'+':'')+brl(dif):'—'}</td>
-        <td><button class="btn btn-mini" data-i="${i}">Cotar</button></td></tr>`;}).join(''):'';
-    $('p_tab').querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>cotarPedido(PEDIDOS[+b.dataset.i]));
-  }catch(e){ $('p_status').innerHTML='<span class="err">Erro ao carregar os pedidos: '+esc(e.message)+'</span>'; }
+    LISTA=j[r]; const n=LISTA.length;
+    $('p_status').innerHTML=`${n} registro(s)${n===300?' (mostrando os 300 mais recentes)':''}. Clique numa linha para ver os itens. ${textoSync()}`;
+    $('p_tab').innerHTML=n?RENDER[r].cab+LISTA.map((x,i)=>`<tr class="lin" data-i="${i}">${RENDER[r].lin(x,i)}</tr>`).join(''):'';
+    $('p_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=e=>{ if(e.target.closest('button')) return; detalheItens(r,LISTA[+tr.dataset.i],tr); });
+    $('p_tab').querySelectorAll('button[data-cotar]').forEach(b=>b.onclick=()=>cotarDoc(r,LISTA[+b.dataset.cotar]));
+  }catch(e){ $('p_status').innerHTML='<span class="err">Erro ao carregar: '+esc(e.message)+'</span>'; $('p_tab').innerHTML=''; }
 }
-function cotarPedido(p){
+const cotCel=x=>{ const cot=x.cotacao_id?(+(x.valor_escolhido??x.melhor_valor)):null;
+  return cot!=null?brl(cot)+`<br><span class="small">${esc(x.transportadora_escolhida||x.melhor_transportadora||'')}</span>`:'<span class="small">sem cotação</span>'; };
+const destCel=x=>x.cidade?esc(x.cidade)+'/'+esc(x.uf):'<span class="aviso">sem CEP</span>';
+const RENDER={
+  pedidos:{cab:'<tr><th>Nº</th><th>Data</th><th>Canal</th><th>Situação</th><th>Cliente</th><th>Destino</th><th class="n">Peso no pedido</th><th class="n">Peso pelos itens</th><th class="n">Valor</th><th class="n">Frete no Bling</th><th class="n">Cotação</th><th class="n">Diferença</th><th></th></tr>',
+    lin:(p,i)=>{ const cot=p.cotacao_id?(+(p.valor_escolhido??p.melhor_valor)):null, fb=+p.frete_bling||0, dif=(cot!=null&&fb>0)?fb-cot:null, cm=+p.custo_frete_marketplace||0;
+      return `<td>${esc(p.numero)}${p.numero_loja?`<br><span class="small">loja ${esc(p.numero_loja)}</span>`:''}</td><td>${dataBR(p.data)}</td><td>${canalTag(p.canal)}</td>
+      <td class="small">${esc(p.situacao||(p.situacao_id!=null?'Situação '+p.situacao_id:'—'))}</td><td>${esc(p.cliente||'')}</td><td>${destCel(p)}</td>
+      <td class="n">${kg(p.peso_bruto)}</td><td class="n">${pesoDoc(p)}</td><td class="n">${brl(+(p.valor_produtos||p.valor_total||0))}</td>
+      <td class="n">${fb>0?brl(fb):'<span class="small">não lançado</span>'}${p.transportadora_bling?`<br><span class="small">${esc(p.transportadora_bling)}</span>`:''}${cm>0?`<br><span class="small">custo frete marketplace: ${brl(cm)}</span>`:''}</td>
+      <td class="n">${cotCel(p)}</td><td class="n ${dif>0.01?'dif-pos':dif<-0.01?'dif-neg':''}">${dif!=null?(dif>0?'+':'')+brl(dif):'—'}</td>
+      <td><button class="btn btn-mini" data-cotar="${i}">Cotar</button></td>`; }},
+  propostas:{cab:'<tr><th>Nº</th><th>Data</th><th>Situação</th><th>Cliente</th><th>Destino</th><th class="n">Peso pelos itens</th><th class="n">Valor</th><th class="n">Frete na proposta</th><th class="n">Cotação</th><th></th></tr>',
+    lin:(p,i)=>`<td>${esc(p.numero)}</td><td>${dataBR(p.data)}</td><td class="small">${esc(p.situacao||'—')}</td><td>${esc(p.cliente||'')}</td><td>${destCel(p)}</td>
+      <td class="n">${pesoDoc(p)}</td><td class="n">${brl(+(p.valor_produtos||p.valor_total||0))}</td><td class="n">${+p.frete>0?brl(+p.frete):'—'}</td>
+      <td class="n">${cotCel(p)}</td><td><button class="btn btn-mini" data-cotar="${i}">Cotar</button></td>`},
+  notas:{cab:'<tr><th>NF</th><th>Emissão</th><th>Pedido</th><th>Cliente</th><th>Destino</th><th>Transportadora</th><th class="n">Volumes</th><th class="n">Peso na NF</th><th class="n">Peso pelos itens</th><th class="n">Valor da NF</th><th class="n">Frete na NF</th></tr>',
+    lin:n=>`<td>${esc(n.numero)}${n.serie?`<span class="small">/${esc(n.serie)}</span>`:''}</td><td>${dataBR(n.data_emissao)}</td>
+      <td>${n.pedido_numero?esc(n.pedido_numero)+'<br>'+canalTag(n.canal):'<span class="small">—</span>'}</td><td>${esc(n.cliente||'')}</td><td>${destCel(n)}</td>
+      <td class="small">${esc(n.transportadora||'—')}</td><td class="n">${n.volumes||'—'}</td><td class="n">${kg(n.peso_bruto)}</td><td class="n">${pesoDoc(n)}</td>
+      <td class="n">${brl(+n.valor_nota||0)}</td><td class="n">${+n.valor_frete>0?brl(+n.valor_frete):'—'}</td>`},
+  produtos:{cab:'<tr><th>Código</th><th>Produto</th><th>Tipo</th><th class="n">Preço</th><th class="n">Peso bruto (cadastro)</th><th class="n">Peso usado</th><th class="n">Componentes</th></tr>',
+    lin:p=>`<td>${esc(p.codigo||'')}</td><td>${esc(p.nome||'')}${p.situacao==='I'?' <span class="small">(inativo)</span>':''}</td>
+      <td class="small">${+p.n_componentes>0?'Kit':p.formato==='V'?'Com variações':'Simples'}</td><td class="n">${p.preco!=null?brl(+p.preco):'—'}</td>
+      <td class="n">${kg(p.peso_bruto)}</td><td class="n">${+p.peso_unitario>0?kg(p.peso_unitario)+(p.origem_peso==='componentes'?'<br><span class="small">soma dos componentes</span>':''):'<span class="aviso">sem peso</span>'}</td>
+      <td class="n">${+p.n_componentes||'—'}</td>`}};
+async function detalheItens(tipoLista,x,tr){
+  const tipo={pedidos:'pedido',propostas:'proposta',notas:'nota',produtos:'produto'}[tipoLista];
+  $('p_tab').querySelectorAll('tr.sel').forEach(t=>t.classList.remove('sel')); tr.classList.add('sel');
+  $('p_det').innerHTML='<div class="card small">Carregando itens…</div>';
+  try{ const j=await api(`/api/bling/itens?tipo=${tipo}&id=${x.id}`);
+    const titulo=tipo==='produto'?`Produto ${esc(x.codigo||'')} – ${esc(x.nome||'')}`:`${{pedido:'Pedido',proposta:'Proposta',nota:'NF'}[tipo]} ${esc(x.numero)}${x.cliente?' · '+esc(x.cliente):''}`;
+    let tot=0;
+    const linhas=j.itens.map(i=>{
+      const pu=+i.peso_unitario||0, pt=pu*(+i.quantidade||0); tot+=pt;
+      const comp=i.componentes.length?`<tr class="comp"><td></td><td colspan="6"><table class="mini"><tr><th>Componente</th><th class="n">Qtd. por kit</th><th class="n">Qtd. total</th><th class="n">Peso unit.</th><th class="n">Peso total</th><th class="n">Preço unit.</th></tr>`+
+        i.componentes.map(c=>`<tr><td>${esc(c.codigo||'')} ${esc(c.nome||'(produto '+c.componente_id+' ainda não importado)')}</td><td class="n">${(+c.quantidade).toLocaleString('pt-BR')}</td>
+          <td class="n">${(+c.quantidade*(+i.quantidade||0)).toLocaleString('pt-BR')}</td><td class="n">${kg(c.peso_bruto)}</td>
+          <td class="n">${kg((+c.peso_bruto||0)*(+c.quantidade)*(+i.quantidade||0))}</td><td class="n">${c.preco!=null?brl(+c.preco):'—'}</td></tr>`).join('')+'</table></td></tr>':'';
+      return `<tr><td>${esc(i.codigo||'')}</td><td>${esc(i.descricao||i.nome||'')}${i.componentes.length?' <span class="canal canal-mk">kit</span>':''}${!i.pid?' <span class="small aviso">produto não encontrado no cadastro</span>':''}</td>
+        <td class="n">${(+i.quantidade).toLocaleString('pt-BR')} ${esc(i.unidade||'')}</td><td class="n">${i.valor!=null?brl(+i.valor):'—'}</td>
+        <td class="n">${pu>0?kg(pu):'<span class="aviso">sem peso</span>'}</td><td class="n">${pt>0?kg(pt):'—'}</td><td class="n">${i.valor_total!=null?brl(+i.valor_total):brl((+i.valor||0)*(+i.quantidade||0))}</td></tr>`+comp; }).join('');
+    $('p_det').innerHTML=`<div class="card"><h2>${titulo}</h2>
+      ${j.itens.length?`<table><tr><th>Código</th><th>Descrição</th><th class="n">Qtd.</th><th class="n">Valor unit.</th><th class="n">Peso unit.</th><th class="n">Peso total</th><th class="n">Valor total</th></tr>${linhas}
+      ${tipo!=='produto'?`<tr><td></td><td><b>Total</b></td><td></td><td></td><td></td><td class="n"><b>${kg(tot)}</b></td><td></td></tr>`:''}</table>`:'<p class="small">Sem itens importados.</p>'}</div>`;
+    $('p_det').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){ $('p_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
+}
+function cotarDoc(r,p){
   document.querySelector('nav button[data-t=calc]').click();
-  preencherPedido({id:p.id,numero:p.numero,cliente:p.cliente,cep:p.cep,origemCep:p.origem_cep,pesoBruto:+p.peso_bruto||null,
-    volumes:+p.volumes||null,valorProdutos:+p.valor_produtos||null,valorTotal:+p.valor_total||null,freteAtual:+p.frete_bling||null});
+  const pesoPedido=+p.peso_bruto||0, pesoItens=+p.peso_calculado||0;
+  preencherPedido({tipo:r==='propostas'?'proposta':'pedido',id:p.id,numero:p.numero,cliente:p.cliente,cep:p.cep,origemCep:p.origem_cep,
+    pesoBruto:pesoPedido||pesoItens||null,origemPeso:pesoPedido?'pedido':pesoItens?'itens':'',pesoItens:pesoItens||null,
+    volumes:+p.volumes||null,valorProdutos:+p.valor_produtos||null,valorTotal:+p.valor_total||null,freteAtual:+(p.frete_bling||p.frete)||null,canal:p.canal});
   window.scrollTo({top:0,behavior:'smooth'});
 }
 $('b_buscar').onclick=buscarPedidoBling;

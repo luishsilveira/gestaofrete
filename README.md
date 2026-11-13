@@ -10,7 +10,8 @@ Site estático: não tem servidor nem banco de dados. Todo o cálculo roda no na
 wrangler.jsonc                            configuração do Cloudflare Workers (site + API + banco)
 package.json                              dependências do servidor (driver PostgreSQL "pg")
 src/index.js                              servidor: API do histórico de cotações e do Bling (/api/*)
-src/bling.js                              integração com o Bling (OAuth, tokens, busca de pedido)
+src/bling.js                              integração com o Bling (OAuth, tokens, chamadas à API)
+src/sync.js                               importação do Bling (pedidos, propostas, NF-e, produtos e kits)
 public/index.html                         página
 public/css/app.css                        estilos
 public/js/app.js                          motor de cálculo e telas
@@ -64,18 +65,35 @@ public/_headers                           cache (dados sempre atualizados)
    - `GET /api/bling/callback`
    - `GET /api/bling/pedido?numero=`
 
-## Pedidos importados do Bling (aba "Pedidos Bling")
+## Dados importados do Bling (aba "Bling")
 
-- **Importação automática a cada 5 minutos** (`triggers.crons` no `wrangler.jsonc`): traz os pedidos alterados desde o último ciclo completo, com um dia de folga. Na primeira execução, traz os últimos 30 dias. Cada execução faz no máximo 40 chamadas ao Bling, por causa do limite do plano gratuito do Cloudflare, e o que sobrar fica para a execução seguinte. Pedidos novos ou alterados (situação ou valor) são lidos primeiro. Os demais só são relidos depois de 30 minutos.
-- **Busca manual:** buscar um pedido na calculadora também grava o pedido.
-- **Tabela `pedidos_bling`:** nº, data, situação, cliente, CPF/CNPJ, CEP/cidade/UF, peso bruto, volumes, valores, **frete lançado no Bling**, quem paga o frete, transportadora do pedido e a resposta completa do Bling (`dados`, JSONB). A tabela `bling_situacoes` guarda os nomes das situações, e a `bling_sync`, o estado da importação.
-- **Tela:** lista os pedidos com o frete do Bling, a última cotação (escolhida ou melhor) e a **diferença**, em vermelho quando o frete lançado está acima da cotação. Filtros: sem cotação, sem frete lançado, frete acima da cotação. O botão "Cotar" leva o pedido para a calculadora, e "Sincronizar agora" roda a importação na hora.
+A aba tem quatro listas: **Pedidos, Propostas, Notas fiscais e Produtos**. Clicar numa linha mostra os itens com o peso de cada um e, nos kits, os componentes.
+
+- **Importação automática a cada 5 minutos** (`triggers.crons` no `wrangler.jsonc`, código em `src/sync.js`). Cada recurso guarda o próprio estado em `bling_sync_recurso`.
+  - Pedidos de venda (todos os canais, inclusive Mercado Livre), propostas comerciais e NF-e: últimos 30 dias. Depois, só os alterados.
+  - NF-e: só notas de saída (`tipo=1`), sem o XML.
+  - Produtos: o cadastro inteiro na primeira vez, depois os alterados. Produtos usados em pedidos, propostas, notas ou kits e ainda não importados são buscados primeiro.
+  - Cada execução faz no máximo 40 chamadas ao Bling, divididas entre os recursos, e o que sobrar fica para a execução seguinte. A carga inicial leva algumas execuções.
+  - Documentos sem mudança (assinatura: situação, valor, data de alteração) não são relidos. Se o Bling recusar um filtro de data (HTTP 400), a importação usa um filtro mais simples.
+- **Canal do pedido** (`pedidos_bling.canal`), pelo CNPJ do intermediador: Mercado Livre (03.007.331/0001-41), Shopee, Amazon, Magazine Luiza. Outro intermediador vira "Marketplace"; pedido com loja e sem intermediador, "Loja virtual"; o resto, "Venda direta". Também são gravados o nº do pedido na loja, o custo de frete do marketplace e o ID da NF ligada ao pedido.
+- **Peso pelos itens:** a view `produtos_peso` usa o peso bruto do produto e, quando ele é zero, a soma dos componentes do kit (peso × quantidade). As listas mostram o peso do documento e o peso calculado pelos itens. O botão "Cotar" usa o peso do pedido e, se estiver zerado (comum no Mercado Livre), o peso pelos itens.
+- **Tabelas:**
+  - `pedidos_bling`, `propostas_bling`, `notas_bling`, `produtos_bling`: campos principais e a resposta completa do Bling (`dados`, JSONB).
+  - `pedido_itens`, `proposta_itens`, `nota_itens`: itens de cada documento.
+  - `produtos_estrutura`: componentes dos kits (produto, componente, quantidade). É a base da análise de custo por item do kit.
+  - `bling_situacoes`: nomes das situações.
+- **Cotação ligada:** a cotação salva a partir de um pedido grava `bling_pedido_id`; a partir de uma proposta, `bling_proposta_id`.
+- **Permissões do aplicativo no Bling:** Pedidos de Venda, Propostas Comerciais, Notas Fiscais (NF-e), Produtos, Contatos e Situações. Depois de mudar as permissões, use "Reconectar ao Bling".
 - **API:**
-  - `GET /api/bling/pedidos?busca=&filtro=&limite=`
+  - `GET /api/bling/pedidos?busca=&filtro=&canal=&limite=` (canal: `direta`, `marketplace` ou o nome, ex. `Mercado Livre`)
+  - `GET /api/bling/propostas?busca=&filtro=sem_cotacao`
+  - `GET /api/bling/notas?busca=&filtro=autorizadas|sem_pedido`
+  - `GET /api/bling/produtos?busca=&filtro=kits|sem_peso`
+  - `GET /api/bling/itens?tipo=pedido|proposta|nota|produto&id=`
   - `POST /api/bling/sincronizar`
 - **Testes:**
   - `npm test`: lógica do Bling.
-  - `npm run test:sync`: importação contra um PostgreSQL local, via `psql`.
+  - `npm run test:sync`: importação dos quatro recursos e API contra um PostgreSQL local, via `psql` (`tests/pgpsql.mjs`, com um módulo `pg` de teste que repassa as consultas a ele).
 
 ## Como atualizar uma tabela
 

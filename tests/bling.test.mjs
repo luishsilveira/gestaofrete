@@ -1,4 +1,5 @@
-import { pedirToken, tokenValido, buscarPedido, BLING } from '../src/bling.js';
+import { pedirToken, tokenValido, BLING } from '../src/bling.js';
+import { buscarPedido } from '../src/sync.js';
 const env={BLING_CLIENT_ID:'cid',BLING_CLIENT_SECRET:'sec'};
 const log=[]; let ok=0, fail=0;
 const t=(nome,cond)=>{ cond?ok++:fail++; console.log((cond?'OK  ':'FALHA ')+nome); };

@@ -1,91 +1,145 @@
-import { db, psql } from './pgpsql.mjs';
-import { SCHEMA_BLING, sincronizarPedidos, gravarPedidos, buscarPedido, BLING } from '../src/bling.js';
-import fs from 'node:fs';
-const idx = fs.readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
-const SCHEMA = idx.match(/const SCHEMA = `([\s\S]*?)`;/)[1];
+// Teste de ponta a ponta da importação do Bling e da API, contra um PostgreSQL local (via psql).
+// Requer: PostgreSQL local na porta 5499 (socket /tmp/pgt), banco "gf" vazio, e um stub do módulo "pg"
+// que use ./pgpsql.mjs (ver README, seção Testes).
+import { psql } from './pgpsql.mjs';
+import worker from '../src/index.js';
+import { BLING, SCHEMA_BLING } from '../src/bling.js';
+import { SCHEMA_DOCS, sincronizarTudo } from '../src/sync.js';
+import { db } from './pgpsql.mjs';
+
 let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
-psql(SCHEMA); psql(SCHEMA_BLING); psql(SCHEMA_BLING);
-psql(`INSERT INTO bling_tokens (id, access_token, refresh_token, expira_em) VALUES (1,'TK','RF', now()+interval '5 hours');`);
-const env = { BLING_CLIENT_ID: 'c', BLING_CLIENT_SECRET: 's' };
 const hoje = new Date().toISOString().slice(0, 10);
-let LISTA = [
-  { id: 101, numero: 5001, data: hoje, total: 1000, situacao: { id: 6 } },
-  { id: 102, numero: 5002, data: hoje, total: 2000, situacao: { id: 6 } },
-  { id: 103, numero: 5003, data: hoje, total: 3283.35, situacao: { id: 9 } },
-];
-const DET = {
-  101: { id: 101, numero: 5001, data: hoje, totalProdutos: 1000, total: 1000, situacao: { id: 6 }, contato: { id: 1, nome: 'Cliente A', numeroDocumento: '11.111.111/0001-11' },
-         transporte: { frete: 0, fretePorConta: 0, pesoBruto: 50, quantidadeVolumes: 2, etiqueta: { cep: '90010-000', municipio: 'Porto Alegre', uf: 'RS' } } },
-  102: { id: 102, numero: 5002, data: hoje, totalProdutos: 2000, total: 2000, situacao: { id: 6 }, contato: { id: 2, nome: 'Cliente B' },
-         transporte: { frete: 150.5, pesoBruto: 80, quantidadeVolumes: 3, etiqueta: {}, contato: { nome: 'Braspress' } } },
-  103: { id: 103, numero: 5003, data: hoje, totalProdutos: 3283.35, total: 3283.35, situacao: { id: 9 }, contato: { id: 3, nome: 'Irisvan' },
-         transporte: { frete: 400, pesoBruto: 190, quantidadeVolumes: 10, etiqueta: { cep: '65901-307', municipio: 'Imperatriz', uf: 'MA' } } },
+const env = { BLING_CLIENT_ID: 'c', BLING_CLIENT_SECRET: 's', HYPERDRIVE: { connectionString: 'x' }, ASSETS: { fetch: async () => new Response('asset') } };
+const ctx = { waitUntil: () => {} };
+const api = async (path, method = 'GET', body) => {
+  const r = await worker.fetch(new Request('https://x.dev' + path, { method, body: body && JSON.stringify(body), headers: { 'cf-access-authenticated-user-email': 'luis@x', 'content-type': 'application/json' } }), env, ctx);
+  return { status: r.status, j: await r.json() };
 };
-let recusaAlteracao = false; const urls = [];
-const fakeFetch = async (url) => {
-  const u = url.replace(BLING.apiBase, ''); urls.push(u);
-  const R = (s, j) => ({ ok: s < 300, status: s, json: async () => j });
-  if (u.startsWith('/pedidos/vendas?')) {
-    if (recusaAlteracao && u.includes('dataAlteracaoInicial')) return R(400, { error: { description: 'parâmetro inválido' } });
-    if (u.includes('numero=')) { const n = u.match(/numero=(\d+)/)[1]; return R(200, { data: LISTA.filter((p) => String(p.numero) === n) }); }
-    return R(200, { data: u.includes('pagina=1') ? LISTA : [] });
-  }
-  const m = u.match(/^\/pedidos\/vendas\/(\d+)$/); if (m) return R(200, { data: JSON.parse(JSON.stringify(DET[m[1]])) });
-  if (u === '/contatos/2') return R(200, { data: { numeroDocumento: '222', endereco: { geral: { cep: '57400-000', municipio: 'Pão de Açúcar', uf: 'AL' } } } });
-  const s = u.match(/^\/situacoes\/(\d+)$/); if (s) return R(200, { data: { id: +s[1], nome: s[1] === '6' ? 'Em aberto' : 'Atendido' } });
+
+// ---------- Bling simulado
+const pedidos = {
+  101: { id: 101, numero: 5001, data: hoje, totalProdutos: 1000, total: 1000, situacao: { id: 6 }, contato: { id: 1, nome: 'Cliente A' }, loja: { id: 0 },
+         notaFiscal: { id: 9001 }, transporte: { frete: 0, pesoBruto: 50, quantidadeVolumes: 2, etiqueta: { cep: '90010-000', municipio: 'Porto Alegre', uf: 'RS' } },
+         itens: [{ produto: { id: 501 }, codigo: 'D110160', descricao: 'Tubo saco 51x110x160', quantidade: 1000, valor: 1.18 }] },
+  102: { id: 102, numero: 3552, data: hoje, totalProdutos: 95.88, total: 94, situacao: { id: 6 }, contato: { id: 2, nome: 'Fabio (ML)' }, loja: { id: 777 }, numeroLoja: '2000009999',
+         intermediador: { cnpj: '03.007.331/0001-41', nomeUsuario: 'fabiubatista' }, taxas: { taxaComissao: 11.28, custoFrete: 19.75 },
+         transporte: { frete: 0, pesoBruto: 0, etiqueta: { cep: '57400-000', municipio: 'Pão de Açúcar', uf: 'AL' } },
+         itens: [{ produto: { id: 503 }, codigo: 'D16-50', descricao: 'Tubo Saco 51X110X160 50 unidades COM LACRES', quantidade: 1, valor: 95.88 }] },
+};
+const propostas = {
+  201: { id: 201, numero: 159461, data: hoje, situacao: 'Pendente', total: 1360, totalProdutos: 1360, contato: { id: 3, nome: 'FELICIO MELOTTI NETTO' },
+         itens: [{ produto: { id: 501 }, descricao: 'TUBO Saco 51X110X160', quantidade: 1000, valor: 1.18 }, { produto: { id: 502 }, descricao: 'KIT LACRE', quantidade: 1000, valor: 0.18 }] },
+};
+const notas = {
+  9001: { id: 9001, tipo: 1, numero: '12345', serie: '1', dataEmissao: hoje + ' 10:00:00', situacao: 5, chaveAcesso: '4326...', valorNota: 1000, valorFrete: 0,
+          contato: { nome: 'Cliente A', numeroDocumento: '11', endereco: { cep: '90010-000', municipio: 'Porto Alegre', uf: 'RS' } },
+          transporte: { fretePorConta: 0, transportador: { nome: 'Trânsito Brasil' }, volume: { quantidade: 2, pesoBruto: 52.5, pesoLiquido: 50 } },
+          itens: [{ codigo: 'D110160', descricao: 'Tubo saco', quantidade: 1000, valor: 1.18, valorTotal: 1180 }], xml: '<grande/>' },
+  9002: { id: 9002, tipo: 0, numero: '1', situacao: 5 },
+};
+const produtos = {
+  501: { id: 501, codigo: 'D110160', nome: 'Tubo Saco 51x110x160', formato: 'S', situacao: 'A', preco: 1.18, pesoBruto: 0.292, pesoLiquido: 0.29 },
+  502: { id: 502, codigo: 'LACRE', nome: 'KIT LACRE FRONTEC 4,8X180 PRETO UV', formato: 'S', situacao: 'A', preco: 0.18, pesoBruto: 0.002 },
+  503: { id: 503, codigo: 'D16-50', nome: 'Tubo Saco 51X110X160 50 un COM LACRES', formato: 'E', situacao: 'A', preco: 95.88, pesoBruto: 0,
+         estrutura: { componentes: [{ produto: { id: 501 }, quantidade: 50 }, { produto: { id: 502 }, quantidade: 50 }] } },
+};
+const urls = []; let recusar = new Set();
+globalThis.fetch = async (url) => {
+  const u = String(url).replace(BLING.apiBase, ''); urls.push(u);
+  const R = (s, j) => new Response(JSON.stringify(j), { status: s, headers: { 'content-type': 'application/json' } });
+  for (const r of recusar) if (u.includes(r)) return R(400, { error: { description: 'parâmetro inválido' } });
+  const lista = (obj, f = () => true) => R(200, { data: u.includes('pagina=1') || !u.includes('pagina=') ? Object.values(obj).filter(f).map((x) => ({ id: x.id, numero: x.numero, data: x.data, dataEmissao: x.dataEmissao, total: x.total, situacao: x.situacao, tipo: x.tipo, preco: x.preco, formato: x.formato })) : [] });
+  if (u.startsWith('/pedidos/vendas?')) return lista(pedidos);
+  if (u.startsWith('/propostas-comerciais?')) return lista(propostas);
+  if (u.startsWith('/nfe?')) return lista(notas);
+  if (u.startsWith('/produtos?')) return lista(produtos);
+  let m;
+  if ((m = u.match(/^\/pedidos\/vendas\/(\d+)$/))) return R(200, { data: structuredClone(pedidos[m[1]]) });
+  if ((m = u.match(/^\/propostas-comerciais\/(\d+)$/))) return R(200, { data: structuredClone(propostas[m[1]]) });
+  if ((m = u.match(/^\/nfe\/(\d+)$/))) return R(200, { data: structuredClone(notas[m[1]]) });
+  if ((m = u.match(/^\/produtos\/(\d+)$/))) return produtos[m[1]] ? R(200, { data: structuredClone(produtos[m[1]]) }) : R(404, {});
+  if (u === '/contatos/3') return R(200, { data: { numeroDocumento: '333', endereco: { geral: { cep: '29100-000', municipio: 'Vila Velha', uf: 'ES' } } } });
+  if ((m = u.match(/^\/situacoes\/(\d+)$/))) return R(200, { data: { id: +m[1], nome: 'Em aberto' } });
   return R(404, {});
 };
-// 1ª sincronização
-let r = await sincronizarPedidos(env, db, fakeFetch);
-t(`1ª sync: ${r.mensagem}`, r.lidos === 3 && r.completo && r.pendentes === 0);
-t('filtro dataAlteracaoInicial = hoje-30', urls[0].includes('dataAlteracaoInicial=' + new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)));
-let P = JSON.parse(psql(`SELECT json_agg(t ORDER BY id) FROM (SELECT id, numero, cep, cidade, uf, origem_cep, peso_bruto, volumes, frete_bling, transportadora_bling, documento, importado_por FROM pedidos_bling) t;`));
-t('3 pedidos gravados', P.length === 3);
-t('CEP da etiqueta (101)', P[0].cep === '90010000' && P[0].origem_cep === 'etiqueta de transporte');
-t('CEP do cadastro (102) + doc', P[1].cep === '57400000' && P[1].origem_cep === 'cadastro do cliente' && P[1].documento === '222');
-t('frete e transportadora do Bling (102)', +P[1].frete_bling === 150.5 && P[1].transportadora_bling === 'Braspress');
-t('importado_por automático', P[0].importado_por === 'importação automática');
-t('dados brutos guardados', psql(`SELECT dados->'transporte'->>'pesoBruto' FROM pedidos_bling WHERE id=103;`).trim() === '190');
-t('situações nomeadas', psql(`SELECT string_agg(nome, ',' ORDER BY id) FROM bling_situacoes;`).trim() === 'Em aberto,Atendido');
-t('bling_sync gravado', psql(`SELECT ultimo_completo IS NOT NULL FROM bling_sync;`).trim() === 't');
-// 2ª sincronização sem mudanças
-urls.length = 0; r = await sincronizarPedidos(env, db, fakeFetch);
-t(`2ª sync sem mudanças: ${r.mensagem} (${r.chamadas} chamadas)`, r.lidos === 0 && r.chamadas === 1);
-t('desde = último completo - 1 dia', urls[0].includes('dataAlteracaoInicial=' + new Date(Date.now() - 864e5).toISOString().slice(0, 10)));
-// pedido alterado
-LISTA[1].total = 2100; DET[102].total = 2100; DET[102].transporte.frete = 199.9;
-r = await sincronizarPedidos(env, db, fakeFetch);
-t('pedido alterado relido', r.lidos === 1 && psql(`SELECT frete_bling FROM pedidos_bling WHERE id=102;`).trim() === '199.90');
-// limite de chamadas
-psql(`DELETE FROM pedidos_bling; DELETE FROM bling_sync;`);
-r = await sincronizarPedidos(env, db, fakeFetch, { limiteChamadas: 4 });
-const st = psql(`SELECT ultimo_completo IS NULL FROM bling_sync;`).trim();
-t(`limite de chamadas: ${r.mensagem}`, r.pendentes > 0 && !r.completo && st === 't');
-r = await sincronizarPedidos(env, db, fakeFetch);
-t('execução seguinte completa o que faltou', psql(`SELECT count(*) FROM pedidos_bling;`).trim() === '3' && r.completo);
-// Bling recusa dataAlteracaoInicial
-recusaAlteracao = true; urls.length = 0; psql(`DELETE FROM bling_sync;`);
-r = await sincronizarPedidos(env, db, fakeFetch);
-t('reserva com dataInicial', urls.some((u) => u.includes('dataInicial=')) && r.listados === 3);
-recusaAlteracao = false;
-// busca manual grava o pedido
-const p = await buscarPedido('TK', '5003', fakeFetch);
-const { _bruto, ...n } = p; await gravarPedidos(db, [{ n, bruto: _bruto }], 'luis@x');
-t('busca manual atualiza pedido (importado_por mantém o 1º)', psql(`SELECT importado_por FROM pedidos_bling WHERE id=103;`).trim() === 'importação automática');
-// consulta da tela de pedidos (SQL do index.js)
-psql(`INSERT INTO cotacoes (usuario, resultados, bling_pedido_id, melhor_transportadora, melhor_valor, transportadora_escolhida, valor_escolhido) VALUES ('u','[]',103,'Bento',331.25,'Bento',331.25);`);
-const sqlLista = idx.match(/`(SELECT p\.id, p\.numero[\s\S]*?LIMIT \$1)`/)[1];
-const run = (cond) => JSON.parse(psql(`SELECT coalesce(json_agg(t),'[]') FROM (${sqlLista.replace("${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}", cond).replace('$1', '200')}) t;`));
-let L = run('');
-t('lista com cotação e situação', L.length === 3 && L.find((x) => x.id === 103).cotacao_id && L.find((x) => x.id === 101).situacao === 'Em aberto');
-t('filtro sem cotação', run('WHERE c.id IS NULL').length === 2);
-t('filtro frete acima da cotação (400 > 331,25)', run('WHERE p.frete_bling > 0 AND c.id IS NOT NULL AND p.frete_bling > COALESCE(c.valor_escolhido, c.melhor_valor) + 0.01').map((x) => x.id).join() === '103');
-// sem permissão de Contatos: importação continua
-psql(`DELETE FROM pedidos_bling; DELETE FROM bling_sync;`);
-const fetch403 = async (url) => (url.includes('/contatos/') ? { ok: false, status: 403, json: async () => ({ error: { description: 'The request requires higher privileges than provided by the access token' } }) } : fakeFetch(url));
-r = await sincronizarPedidos(env, db, fetch403);
-t(`sem permissão de Contatos: ${r.mensagem}`, r.lidos === 3 && r.semContatos && psql(`SELECT cep IS NULL FROM pedidos_bling WHERE id=102;`).trim() === 't');
-// 403 em pedidos: mensagem clara
-try { await sincronizarPedidos(env, db, async () => ({ ok: false, status: 403, json: async () => ({}) })); t('403 pedidos', false); }
-catch (e) { t('403 em pedidos → ' + e.message, e.codigo === 'permissao' && /pedidos\/vendas/.test(e.message)); }
+
+// ---------- preparação
+let r = await api('/api/bling/status');
+t('status antes de conectar', r.status === 200 && r.j.configurado && !r.j.conectado);
+psql(`INSERT INTO bling_tokens (id, access_token, refresh_token, expira_em) VALUES (1,'TK','RF', now()+interval '5 hours');`);
+
+// ---------- 1ª sincronização (tudo)
+r = await api('/api/bling/sincronizar', 'POST');
+t('sincronizar: ' + r.j.mensagem, r.status === 200 && r.j.resultados.every((x) => !x.erro));
+const q = (s) => psql(s).trim();
+t('pedidos gravados com canal', q(`SELECT string_agg(numero||':'||canal, ',' ORDER BY id) FROM pedidos_bling;`) === '5001:Venda direta,3552:Mercado Livre');
+t('custo frete do ML e nº da loja', q(`SELECT custo_frete_marketplace||'|'||numero_loja FROM pedidos_bling WHERE id=102;`) === '19.75|2000009999');
+t('itens do pedido', q(`SELECT count(*) FROM pedido_itens;`) === '2');
+t('proposta com CEP do cadastro', q(`SELECT cep||'|'||cidade||'|'||situacao FROM propostas_bling;`) === '29100000|Vila Velha|Pendente');
+t('itens da proposta', q(`SELECT count(*) FROM proposta_itens;`) === '2');
+t('só NF de saída', q(`SELECT string_agg(numero, ',') FROM notas_bling;`) === '12345');
+t('NF: transportadora/peso/volumes, sem XML', q(`SELECT transportadora||'|'||peso_bruto||'|'||volumes||'|'||(dados ? 'xml')::text FROM notas_bling;`) === 'Trânsito Brasil|52.500|2|false');
+t('produtos e estrutura do kit', q(`SELECT count(*) FROM produtos_bling;`) === '3' && q(`SELECT string_agg(componente_id||'x'||quantidade, ',' ORDER BY componente_id) FROM produtos_estrutura WHERE produto_id=503;`) === '501x50.0000,502x50.0000');
+t('peso do kit = soma dos componentes', q(`SELECT round(peso_unitario,3)||'|'||origem_peso FROM produtos_peso WHERE id=503;`) === '14.700|componentes');
+t('estado por recurso', q(`SELECT count(*) FROM bling_sync_recurso WHERE ultimo_completo IS NOT NULL;`) === '4');
+
+// ---------- APIs de listagem
+r = await api('/api/bling/pedidos');
+const ml = r.j.pedidos.find((p) => p.numero === '3552');
+t('pedido ML: peso calculado do kit 14,7 kg', ml && +ml.peso_calculado === 14.7 && ml.canal === 'Mercado Livre' && +ml.custo_frete_marketplace === 19.75);
+const pa = r.j.pedidos.find((p) => p.numero === '5001');
+t('pedido 5001: peso calculado 292 kg', pa && +pa.peso_calculado === 292 && +pa.itens_sem_peso === 0);
+t('filtro canal marketplace', (await api('/api/bling/pedidos?canal=marketplace')).j.pedidos.map((p) => p.numero).join() === '3552');
+t('filtro canal venda direta', (await api('/api/bling/pedidos?canal=direta')).j.pedidos.map((p) => p.numero).join() === '5001');
+r = await api('/api/bling/propostas');
+t('proposta: peso 1000×0,292 + 1000×0,002 = 294 kg', +r.j.propostas[0].peso_calculado === 294);
+r = await api('/api/bling/notas');
+t('nota ligada ao pedido 5001 e peso pelos itens (código)', r.j.notas[0].pedido_numero === '5001' && +r.j.notas[0].peso_calculado === 292);
+r = await api('/api/bling/produtos?filtro=kits');
+t('produtos: filtro kits', r.j.produtos.length === 1 && +r.j.produtos[0].n_componentes === 2);
+r = await api('/api/bling/itens?tipo=pedido&id=102');
+t('itens com componentes do kit', r.j.itens[0].componentes.length === 2 && r.j.itens[0].componentes.some((c) => c.nome.startsWith('KIT LACRE')));
+r = await api('/api/bling/status');
+t('status com sincronização', r.j.conectado && r.j.sync && r.j.sync.recursos.length === 4);
+
+// ---------- 2ª sincronização: nada mudou
+urls.length = 0;
+r = await sincronizarTudo(env, db);
+const detalhes = urls.filter((u) => /\/\d+$/.test(u));
+t(`2ª sync sem mudanças: ${r.mensagem} (${r.chamadas} chamadas)`, detalhes.length === 0);
+
+// ---------- alteração e filtros recusados
+pedidos[102].total = 99; pedidos[102].transporte.frete = 25;
+recusar = new Set(['dataAlteracaoInicial']);
+urls.length = 0;
+r = await sincronizarTudo(env, db);
+t('pedido alterado relido usando a reserva dataInicial', urls.some((u) => u.startsWith('/pedidos/vendas?') && u.includes('dataInicial')) && q(`SELECT frete_bling FROM pedidos_bling WHERE id=102;`) === '25.00');
+t('produtos: sem filtro de alteração, só busca faltantes (sem erro)', !r.resultados.find((x) => x.recurso === 'produtos').erro);
+recusar = new Set();
+
+// ---------- produto novo usado num pedido entra como faltante
+pedidos[101].itens.push({ produto: { id: 504 }, codigo: 'NOVO', descricao: 'Produto novo', quantidade: 2, valor: 10 });
+pedidos[101].total = 1020;
+produtos[504] = { id: 504, codigo: 'NOVO', nome: 'Produto novo', formato: 'S', preco: 10, pesoBruto: 1.5 };
+psql(`UPDATE bling_sync_recurso SET ultimo_completo = now() WHERE recurso='produtos';`);
+recusar = new Set(['/produtos?']);
+r = await sincronizarTudo(env, db);
+recusar = new Set();
+t('produto faltante importado mesmo sem listar produtos', q(`SELECT peso_bruto FROM produtos_bling WHERE id=504;`) === '1.5000');
+
+// ---------- limite de chamadas: divide entre recursos e continua depois
+psql(`TRUNCATE pedidos_bling, propostas_bling, notas_bling, produtos_bling, produtos_estrutura, pedido_itens, proposta_itens, nota_itens, bling_sync_recurso;`);
+r = await sincronizarTudo(env, db, fetch, { limiteChamadas: 6 });
+t(`limite 6: ${r.mensagem}`, r.chamadas <= 6 && r.resultados.some((x) => x.pendentes > 0 || x.adiado));
+for (let i = 0; i < 6; i++) await sincronizarTudo(env, db, fetch, { limiteChamadas: 6 });
+t('execuções seguintes completam tudo', q(`SELECT (SELECT count(*) FROM pedidos_bling)||'/'||(SELECT count(*) FROM propostas_bling)||'/'||(SELECT count(*) FROM notas_bling)||'/'||(SELECT count(*) FROM produtos_bling);`) === '2/1/1/4');
+
+// ---------- busca manual e cotação ligada à proposta
+r = await api('/api/bling/pedido?numero=3552');
+t('busca manual devolve canal e itens', r.status === 200 && r.j.canal === 'Mercado Livre' && r.j.itens.length === 1);
+r = await api('/api/cotacoes', 'POST', { resultados: [{ transportadora: 'Bento', total: 300, prazo: '10' }], bling_proposta_id: 201, pedido: '159461' });
+t('cotação salva com proposta', r.status === 201);
+r = await api('/api/bling/propostas');
+t('proposta mostra a cotação', r.j.propostas[0].cotacao_id && +r.j.propostas[0].melhor_valor === 300);
+
 console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);
