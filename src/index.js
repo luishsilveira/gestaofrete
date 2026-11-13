@@ -5,7 +5,7 @@
 // Usuário: e-mail do login do Cloudflare Access (cabeçalho cf-access-authenticated-user-email).
 
 import { Client } from 'pg';
-import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido, buscarPedido } from './bling.js';
+import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido, buscarPedido, gravarPedidos, sincronizarPedidos } from './bling.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS cotacoes (
@@ -140,8 +140,11 @@ async function listarCotacoes(url, env, ctx) {
 // ---------- Bling ----------
 async function blingStatus(env, ctx) {
   if (!blingConfigurado(env)) return json({ configurado: false, conectado: false });
-  const r = await comBanco(env, ctx, (db) => db.query('SELECT expira_em, conectado_por, atualizado_em FROM bling_tokens WHERE id = 1'));
-  return json({ configurado: true, conectado: r.rows.length > 0, ...(r.rows[0] || {}) });
+  const [r, s] = await comBanco(env, ctx, (db) => Promise.all([
+    db.query('SELECT expira_em, conectado_por, atualizado_em FROM bling_tokens WHERE id = 1'),
+    db.query('SELECT ultima_execucao, ultimo_completo, mensagem FROM bling_sync WHERE id = 1'),
+  ]));
+  return json({ configurado: true, conectado: r.rows.length > 0, ...(r.rows[0] || {}), sync: s.rows[0] || null });
 }
 
 async function blingConectar(env, ctx) {
@@ -176,13 +179,46 @@ async function blingCallback(url, env, ctx, usuario) {
   }
 }
 
-async function blingPedido(url, env, ctx) {
+async function blingPedido(url, env, ctx, usuario) {
   if (!blingConfigurado(env)) return json({ erro: 'Integração com o Bling não configurada.', codigo: 'nao_configurado' }, 400);
   const pedido = await comBanco(env, ctx, async (db) => {
     const token = await tokenValido(env, db);
-    return buscarPedido(token, url.searchParams.get('numero'));
+    const p = await buscarPedido(token, url.searchParams.get('numero'));
+    const { _bruto, ...n } = p;
+    await gravarPedidos(db, [{ n, bruto: _bruto }], usuario);
+    return n;
   });
   return json(pedido);
+}
+
+async function blingSincronizar(env, ctx) {
+  if (!blingConfigurado(env)) return json({ erro: 'Integração com o Bling não configurada.' }, 400);
+  const r = await comBanco(env, ctx, (db) => sincronizarPedidos(env, db));
+  return json(r);
+}
+
+async function blingPedidos(url, env, ctx) {
+  const limite = Math.min(Math.max(parseInt(url.searchParams.get('limite') || '200', 10) || 200, 1), 500);
+  const busca = (url.searchParams.get('busca') || '').trim();
+  const filtro = url.searchParams.get('filtro') || '';
+  const cond = [], params = [limite];
+  if (busca) { params.push(`%${busca}%`); cond.push(`(p.numero ILIKE $${params.length} OR p.cliente ILIKE $${params.length} OR p.cidade ILIKE $${params.length} OR p.cep ILIKE $${params.length} OR p.documento ILIKE $${params.length})`); }
+  if (filtro === 'sem_cotacao') cond.push('c.id IS NULL');
+  if (filtro === 'sem_frete') cond.push('COALESCE(p.frete_bling, 0) = 0');
+  if (filtro === 'acima') cond.push('p.frete_bling > 0 AND c.id IS NOT NULL AND p.frete_bling > COALESCE(c.valor_escolhido, c.melhor_valor) + 0.01');
+  const r = await comBanco(env, ctx, (db) => db.query(
+    `SELECT p.id, p.numero, p.data, p.situacao_id, s.nome AS situacao, p.cliente, p.documento, p.cep, p.cidade, p.uf, p.origem_cep,
+            p.peso_bruto, p.volumes, p.valor_produtos, p.valor_total, p.frete_bling, p.frete_por_conta, p.transportadora_bling,
+            p.importado_em, p.importado_por, p.atualizado_em,
+            c.id AS cotacao_id, c.criado_em AS cotado_em, c.melhor_transportadora, c.melhor_valor, c.melhor_prazo,
+            c.transportadora_escolhida, c.valor_escolhido, c.usuario AS cotado_por
+       FROM pedidos_bling p
+       LEFT JOIN bling_situacoes s ON s.id = p.situacao_id
+       LEFT JOIN LATERAL (SELECT * FROM cotacoes WHERE bling_pedido_id = p.id ORDER BY criado_em DESC LIMIT 1) c ON true
+      ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}
+      ORDER BY p.data DESC NULLS LAST, p.id DESC
+      LIMIT $1`, params));
+  return json({ pedidos: r.rows });
 }
 
 async function obterCotacao(id, env, ctx) {
@@ -191,16 +227,19 @@ async function obterCotacao(id, env, ctx) {
   return json(r.rows[0]);
 }
 
-// Tarefa agendada (wrangler.jsonc → triggers.crons): renova o token do Bling e mantém o banco ativo.
+// Tarefa agendada (wrangler.jsonc → triggers.crons, a cada 5 min): importa os pedidos do Bling
+// (o que também renova o token) e mantém o banco ativo.
 async function tarefaAgendada(env, ctx) {
   await comBanco(env, ctx, async (db) => {
     await db.query('SELECT 1');
     if (!blingConfigurado(env)) return;
+    const conectado = (await db.query('SELECT 1 FROM bling_tokens WHERE id = 1')).rows.length > 0;
+    if (!conectado) return;
     try {
-      await tokenValido(env, db, fetch, true);
-      console.log('Bling: token renovado pela tarefa agendada');
+      const r = await sincronizarPedidos(env, db);
+      console.log('Bling: sincronização –', r.mensagem, `(${r.chamadas} chamadas)`);
     } catch (e) {
-      console.error('Bling: falha na renovação agendada –', e.message);
+      console.error('Bling: falha na sincronização –', e.message);
     }
   });
 }
@@ -222,7 +261,9 @@ export default {
       if (url.pathname === '/api/bling/status') return await blingStatus(env, ctx);
       if (url.pathname === '/api/bling/conectar') return await blingConectar(env, ctx);
       if (url.pathname === '/api/bling/callback') return await blingCallback(url, env, ctx, usuario);
-      if (url.pathname === '/api/bling/pedido') return await blingPedido(url, env, ctx);
+      if (url.pathname === '/api/bling/pedido') return await blingPedido(url, env, ctx, usuario);
+      if (url.pathname === '/api/bling/pedidos' && request.method === 'GET') return await blingPedidos(url, env, ctx);
+      if (url.pathname === '/api/bling/sincronizar' && request.method === 'POST') return await blingSincronizar(env, ctx);
       const m = url.pathname.match(/^\/api\/cotacoes\/(\d+)$/);
       if (m && request.method === 'GET') return await obterCotacao(m[1], env, ctx);
       return json({ erro: 'Rota não encontrada.' }, 404);

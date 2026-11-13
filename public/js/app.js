@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; const VERSAO='1.3';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.3';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -252,7 +252,7 @@ function calc(){
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal'].forEach(id=>$(id).addEventListener('input',calc));
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico();});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','ped','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico(); if(b.dataset.t==='ped') carregarPedidos();});
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
 function renderTab(){
@@ -331,7 +331,7 @@ async function iniciarBling(){
   if(q.get('bling')) history.replaceState(null,'',location.pathname);
   try{ const s=await api('/api/bling/status');
     if(!s.configurado) return;
-    $('bling').classList.remove('hide');
+    $('bling').classList.remove('hide'); $('tab_ped').classList.remove('hide'); BLING_SYNC=s.sync;
     $('b_conectar').classList.toggle('hide',s.conectado);
     $('b_status').innerHTML=msg||(s.conectado?'':'Para buscar pedidos, conecte a calculadora ao Bling (só é preciso uma vez).');
   }catch(e){ /* sem API */ }
@@ -340,6 +340,14 @@ async function buscarPedidoBling(){
   const n=$('b_num').value.replace(/\D/g,''); if(!n) return;
   $('b_buscar').disabled=true; $('b_status').innerHTML='Buscando pedido no Bling…';
   try{ const p=await api('/api/bling/pedido?numero='+n);
+    preencherPedido(p);
+  }catch(e){
+    $('b_status').innerHTML='<span class="err">'+esc(e.message)+'</span>';
+    if(/conect/i.test(e.message)) $('b_conectar').classList.remove('hide');
+  }finally{ $('b_buscar').disabled=false; }
+}
+function preencherPedido(p){
+    $('b_num').value=p.numero;
     BLING_PED={id:p.id,numero:p.numero}; $('s_transp').dataset.escolhida='';
     const avisos=[];
     if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('o pedido não tem peso bruto no Bling: informe o peso');
@@ -353,10 +361,49 @@ async function buscarPedidoBling(){
       (avisos.length?`<br><span class="aviso">Atenção: ${avisos.join('; ')}.</span>`:'');
     if(p.cep){ $('cep').value=fmtCep(+p.cep); $('cep').dispatchEvent(new Event('input')); }
     else { $('b_status').innerHTML+='<br><span class="aviso">O pedido não tem CEP de entrega: informe o CEP.</span>'; calc(); }
-  }catch(e){
-    $('b_status').innerHTML='<span class="err">'+esc(e.message)+'</span>';
-    if(/conect/i.test(e.message)) $('b_conectar').classList.remove('hide');
-  }finally{ $('b_buscar').disabled=false; }
+}
+
+// ---------- Pedidos importados do Bling ----------
+const dataBR=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('pt-BR'):'—';
+const horaBR=d=>d?new Date(d).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';
+let PEDIDOS=[]; let pTimer=null;
+$('p_busca').addEventListener('input',()=>{ clearTimeout(pTimer); pTimer=setTimeout(carregarPedidos,400); });
+$('p_filtro').onchange=carregarPedidos;
+$('p_sync').onclick=async()=>{
+  const b=$('p_sync'); b.disabled=true; $('p_status').textContent='Sincronizando com o Bling…';
+  try{ const r=await api('/api/bling/sincronizar',{method:'POST'}); BLING_SYNC={ultima_execucao:new Date().toISOString(),mensagem:r.mensagem}; await carregarPedidos(); }
+  catch(e){ $('p_status').innerHTML='<span class="err">Erro ao sincronizar: '+esc(e.message)+'</span>'; }
+  finally{ b.disabled=false; }
+};
+async function carregarPedidos(){
+  $('p_status').textContent='Carregando…';
+  try{
+    const q=new URLSearchParams({busca:$('p_busca').value.trim(),filtro:$('p_filtro').value,limite:'300'});
+    const [j,s]=await Promise.all([api('/api/bling/pedidos?'+q),api('/api/bling/status').catch(()=>null)]);
+    if(s&&s.sync) BLING_SYNC=s.sync;
+    PEDIDOS=j.pedidos;
+    const sync=BLING_SYNC?`Última sincronização: ${horaBR(BLING_SYNC.ultima_execucao)} – ${esc(BLING_SYNC.mensagem||'')} A importação automática roda a cada 5 minutos.`:'Ainda não houve sincronização. A importação automática roda a cada 5 minutos.';
+    $('p_status').innerHTML=`${PEDIDOS.length} pedido(s)${PEDIDOS.length===300?' (mostrando os 300 mais recentes)':''}. ${sync}`;
+    $('p_tab').innerHTML=PEDIDOS.length?'<tr><th>Nº</th><th>Data</th><th>Situação</th><th>Cliente</th><th>Destino</th><th class="n">Peso</th><th class="n">Valor</th><th class="n">Frete no Bling</th><th class="n">Cotação</th><th class="n">Diferença</th><th></th></tr>'+
+      PEDIDOS.map((p,i)=>{
+        const cot=p.cotacao_id?(+(p.valor_escolhido??p.melhor_valor)):null, fb=+p.frete_bling||0;
+        const dif=(cot!=null&&fb>0)?fb-cot:null;
+        return `<tr><td>${esc(p.numero)}</td><td>${dataBR(p.data)}</td><td class="small">${esc(p.situacao||(p.situacao_id!=null?'Situação '+p.situacao_id:'—'))}</td>
+        <td>${esc(p.cliente||'')}</td><td>${p.cidade?esc(p.cidade)+'/'+esc(p.uf):'<span class="aviso">sem CEP</span>'}</td>
+        <td class="n">${p.peso_bruto>0?(+p.peso_bruto).toLocaleString('pt-BR')+' kg':'<span class="aviso">—</span>'}</td>
+        <td class="n">${brl(+(p.valor_produtos||p.valor_total||0))}</td>
+        <td class="n">${fb>0?brl(fb):'<span class="small">não lançado</span>'}${p.transportadora_bling?`<br><span class="small">${esc(p.transportadora_bling)}</span>`:''}</td>
+        <td class="n">${cot!=null?brl(cot)+`<br><span class="small">${esc(p.transportadora_escolhida||p.melhor_transportadora||'')}</span>`:'<span class="small">sem cotação</span>'}</td>
+        <td class="n ${dif>0.01?'dif-pos':dif<-0.01?'dif-neg':''}">${dif!=null?(dif>0?'+':'')+brl(dif):'—'}</td>
+        <td><button class="btn btn-mini" data-i="${i}">Cotar</button></td></tr>`;}).join(''):'';
+    $('p_tab').querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>cotarPedido(PEDIDOS[+b.dataset.i]));
+  }catch(e){ $('p_status').innerHTML='<span class="err">Erro ao carregar os pedidos: '+esc(e.message)+'</span>'; }
+}
+function cotarPedido(p){
+  document.querySelector('nav button[data-t=calc]').click();
+  preencherPedido({id:p.id,numero:p.numero,cliente:p.cliente,cep:p.cep,origemCep:p.origem_cep,pesoBruto:+p.peso_bruto||null,
+    volumes:+p.volumes||null,valorProdutos:+p.valor_produtos||null,valorTotal:+p.valor_total||null,freteAtual:+p.frete_bling||null});
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 $('b_buscar').onclick=buscarPedidoBling;
 $('b_num').addEventListener('keydown',e=>{ if(e.key==='Enter') buscarPedidoBling(); });

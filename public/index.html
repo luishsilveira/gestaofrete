@@ -11,7 +11,7 @@
 <header>
 <h1>Cotação de Frete – Proloplast</h1>
 <p class="sub" id="subt">Carregando tabelas…</p>
-<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="hist">Histórico</button><button data-t="json">Modelo de dados</button></nav>
+<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="ped" id="tab_ped" class="hide">Pedidos Bling</button><button data-t="hist">Histórico</button><button data-t="json">Modelo de dados</button></nav>
 </header>
 <main>
 <section id="calc">
@@ -81,6 +81,22 @@
 <label>Transportadora</label>
 <select id="tsel" style="max-width:360px"></select>
 <div id="tview" style="margin-top:16px"></div>
+</div>
+</section>
+
+<section id="ped" class="hide">
+<div class="card">
+<div class="hist-top"><h2 style="margin:0">Pedidos importados do Bling</h2>
+<input id="p_busca" placeholder="Buscar por nº, cliente, cidade, CEP ou CPF/CNPJ" style="max-width:380px">
+<select id="p_filtro" style="max-width:240px">
+<option value="">Todos</option>
+<option value="sem_cotacao">Sem cotação</option>
+<option value="sem_frete">Sem frete lançado no Bling</option>
+<option value="acima">Frete no Bling acima da cotação</option>
+</select>
+<button class="btn" id="p_sync">Sincronizar agora</button></div>
+<div class="small" id="p_status" style="margin:10px 0"></div>
+<div class="tbl-wrap"><table id="p_tab"></table></div>
 </div>
 </section>
 

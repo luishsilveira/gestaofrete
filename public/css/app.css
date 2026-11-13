@@ -79,3 +79,8 @@ pre{background:#1d2421;color:#e9efe9;padding:14px;border-radius:8px;overflow:aut
 #b_conectar.hide{display:none}
 .btn2{background:#fff;color:var(--acc);border:1px solid var(--acc)}
 .aviso{color:var(--warn)}
+
+#p_tab td.dif-pos{color:#b3261e;font-weight:500}
+#p_tab td.dif-neg{color:var(--acc)}
+.btn-mini{padding:4px 10px;font-size:12px}
+nav button.hide{display:none}
