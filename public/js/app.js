@@ -362,7 +362,7 @@ $('s_btn').onclick=async()=>{
   corpo.valores_manuais=MAN_PEND;
   if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[{proposta:'bling_proposta_id',nota:'bling_nota_id'}[BLING_PED.tipo]||'bling_pedido_id']=BLING_PED.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
-    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`; MAN_PEND=[]; desenharListaPend();
+    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`; SALVA={id:j.id,chave:chaveCalc()}; MAN_GRAV=MAN_PEND.map(m=>({...m})); MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
 };
@@ -413,19 +413,27 @@ function tabelaManuais(L,remover){
       <td class="small">${esc([m.referencia,m.observacao].filter(Boolean).join(' · '))}${m.usuario?`<br>${esc(m.usuario)}`:''}</td>
       <td>${remover?`<a href="#" class="small m_rem" data-i="${i}">remover</a>`:''}</td></tr>`).join('')+'</table>';
 }
-let MAN_PEND=[];
+let MAN_PEND=[], SALVA=null, MAN_GRAV=[];
+const chaveCalc=()=>ULT?JSON.stringify([dest.cep,dest.cidade,ULT.peso,ULT.nf,ULT.res.map(x=>x.t.transportadora+x.total.toFixed(2))]):'';
 function opcoesManual(){ return ULT?[...ULT.res.map(x=>({nome:x.t.transportadora,calc:+x.total.toFixed(2)})),...ULT.nao.map(n=>({nome:n.t.transportadora,calc:null}))]:[]; }
 function desenharManualCalc(){
   if(!ULT||!ULT.res.length) return;
   const op=opcoesManual(), chave=op.map(o=>o.nome+o.calc).join('|');
   if($('m_form').dataset.chave!==chave){ $('m_form').dataset.chave=chave;
-    formManual($('m_form'),op,async m=>{ MAN_PEND.push(m); desenharListaPend(); }); }
+    formManual($('m_form'),op,async m=>{
+      if(SALVA&&SALVA.chave===chaveCalc()){ // cotação já salva: grava direto nela
+        const r=await api(`/api/cotacoes/${SALVA.id}/manual`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(m)});
+        MAN_GRAV.push(r); }
+      else MAN_PEND.push(m);
+      desenharListaPend(); }); }
+  if(SALVA&&SALVA.chave!==chaveCalc()){ SALVA=null; MAN_GRAV=[]; }
   // recalcula a diferença das pendentes com o cálculo atual
   MAN_PEND.forEach(m=>{ const o=op.find(x=>x.nome===m.transportadora); m.valor_calculado=o?o.calc:null; });
   desenharListaPend();
 }
 function desenharListaPend(){
-  $('m_lista').innerHTML=MAN_PEND.length?tabelaManuais(MAN_PEND,true)+'<div class="small">Será gravado junto com a cotação ao clicar em "Salvar cotação".</div>':'';
+  $('m_lista').innerHTML=(MAN_GRAV.length?tabelaManuais(MAN_GRAV,false)+`<div class="small ok">Gravado na cotação nº ${SALVA.id}.</div>`:'')+
+    (MAN_PEND.length?tabelaManuais(MAN_PEND,true)+'<div class="small">Será gravado junto com a cotação ao clicar em "Salvar cotação".</div>':'');
   $('m_lista').querySelectorAll('.m_rem').forEach(a=>a.onclick=e=>{ e.preventDefault(); MAN_PEND.splice(+a.dataset.i,1); desenharListaPend(); });
 }
 
