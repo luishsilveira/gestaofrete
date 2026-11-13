@@ -50,6 +50,17 @@ public/_headers                           cache (dados sempre atualizados)
   - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
   - `GET /api/cotacoes/{id}`: detalhe completo
 
+## Valores cotados manualmente (divergências)
+
+Quando a transportadora informa um valor diferente do calculado (site, e-mail, telefone, CT-e), o valor é registrado para análise posterior.
+
+- **Onde registrar:** no painel "Salvar cotação" (gravado junto com a cotação) ou depois, no detalhe da cotação no Histórico. Dá para registrar mais de uma transportadora por cotação, inclusive uma que o sistema não cotou.
+- **Campos:** transportadora, valor informado, prazo, referência (nº da cotação, CT-e), motivo provável e observação. O valor calculado pelo sistema naquela cotação fica gravado junto, para a diferença não mudar quando as tabelas forem atualizadas.
+- **Motivos:** Não identificado; Tabela desatualizada / reajuste; Taxa não prevista (TDE, TDA, agendamento…); Praça ou cidade diferente; ICMS; Peso ou cubagem diferente; Valor da NF diferente; Desconto ou negociação; Outro.
+- **Análise:** Histórico → "Análise de divergências". Mostra a diferença média (R$ e %), a menor e a maior, e quantas vezes ficou acima ou abaixo, por transportadora, por motivo, por transportadora e UF e por transportadora e faixa de peso, além da lista de casos. "Baixar planilha (CSV)" exporta os casos com o contexto da cotação (praça, peso, NF, ICMS).
+- **Tabela:** `cotacao_valores_manuais` (cotacao_id, transportadora, valor_calculado, valor_manual, prazo_manual, referencia, motivo, observacao, usuario, criado_em).
+- **API:** `POST /api/cotacoes` aceita `valores_manuais: [...]`; `POST /api/cotacoes/{id}/manual`; `PATCH|DELETE /api/manuais/{id}`; `GET /api/cotacoes?manual=1`; `GET /api/divergencias?de=&ate=&transportadora=`.
+
 ## Integração com o Bling (etapa 1: busca do pedido)
 
 1. **Busca:** o usuário digita o nº do pedido. O servidor busca no Bling (API v3) o CEP de entrega (etiqueta de transporte; se faltar, o endereço do cliente), o peso bruto, a quantidade de volumes, o valor dos produtos e o nome do cliente, e preenche a calculadora.

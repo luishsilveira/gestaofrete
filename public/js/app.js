@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.4';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.5';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -210,6 +210,7 @@ function calc(){
     sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
     const k=res.findIndex(x=>x.t.transportadora===(sel.dataset.escolhida||'')); sel.value=String(k>=0?k:0); }
   if(res.length) $('s_status').textContent='';
+  if(res.length&&API_OK) desenharManualCalc();
   const simples=$('simples').checked;
   $('out').classList.toggle('simple',simples); $('avisos').classList.toggle('hide',simples);
   if(simples){
@@ -307,9 +308,10 @@ $('s_btn').onclick=async()=>{
     sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
+  corpo.valores_manuais=MAN_PEND;
   if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[BLING_PED.tipo==='proposta'?'bling_proposta_id':'bling_pedido_id']=BLING_PED.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
-    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva.`;
+    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`; MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
 };
@@ -321,6 +323,60 @@ $('s_copiar').onclick=async()=>{
     $('s_status').textContent=`Valor ${v} (${x.t.transportadora}) copiado. Cole no campo Frete do pedido no Bling.`; }
   catch(e){ $('s_status').className='small'; $('s_status').textContent=`Valor do frete: ${v} (${x.t.transportadora}). Selecione e copie.`; }
 };
+
+
+// ---------- Valor cotado manualmente (divergências) ----------
+let MOTIVOS=['Não identificado','Tabela desatualizada / reajuste','Taxa não prevista (TDE, TDA, agendamento…)','Praça ou cidade diferente','ICMS','Peso ou cubagem diferente','Valor da NF diferente','Desconto ou negociação','Outro'];
+const difTxt=(man,calc)=>{ if(!(calc>0)) return '<span class="small">sistema não cotou</span>'; const d=man-calc, pc=d/calc*100;
+  return `<span class="${d>0.01?'dif-pos':d<-0.01?'dif-neg':''}">${d>0?'+':''}${brl(d)} (${d>0?'+':''}${pc.toLocaleString('pt-BR',{maximumFractionDigits:1})}%)</span>`; };
+// Desenha o formulário; opcoes = [{nome, calc}] ; aoAdicionar(valor) devolve Promise
+function formManual(el,opcoes,aoAdicionar){
+  el.innerHTML=`<div class="mform">
+    <div><label>Transportadora</label><select class="mf_t">${opcoes.map((o,i)=>`<option value="${i}">${esc(o.nome)}${o.calc>0?' – calculado '+brl(o.calc):' – sem cálculo'}</option>`).join('')}</select></div>
+    <div><label>Valor informado (R$)</label><input class="mf_v" inputmode="decimal" placeholder="0,00"></div>
+    <div><label>Prazo</label><input class="mf_p" maxlength="30" placeholder="dias"></div>
+    <div><label>Referência</label><input class="mf_r" maxlength="80" placeholder="nº da cotação, CT-e…"></div>
+    <div><label>Motivo provável</label><select class="mf_m">${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join('')}</select></div>
+    <div class="mf_obs"><label>Observação</label><input class="mf_o" maxlength="500" placeholder="ex.: cobrou TDE de R$ 45"></div>
+    <div class="mf_acao"><button class="btn btn2 mf_b" type="button">Adicionar</button></div></div>
+    <div class="small mf_dif"></div>`;
+  const q=c=>el.querySelector(c), val=()=>+String(q('.mf_v').value).replace(/\./g,'').replace(',','.')||0;
+  const mostrar=()=>{ const o=opcoes[+q('.mf_t').value]; q('.mf_dif').innerHTML=val()>0&&o?'Diferença para o calculado: '+difTxt(val(),o.calc):''; };
+  q('.mf_v').addEventListener('input',mostrar); q('.mf_t').onchange=mostrar;
+  q('.mf_b').onclick=async()=>{
+    const o=opcoes[+q('.mf_t').value];
+    if(!o||!(val()>0)){ q('.mf_dif').innerHTML='<span class="err">Informe a transportadora e o valor.</span>'; return; }
+    q('.mf_b').disabled=true;
+    try{ await aoAdicionar({transportadora:o.nome,valor_calculado:o.calc||null,valor_manual:val(),prazo_manual:q('.mf_p').value.trim(),
+        referencia:q('.mf_r').value.trim(),motivo:q('.mf_m').value,observacao:q('.mf_o').value.trim()});
+      ['.mf_v','.mf_p','.mf_r','.mf_o'].forEach(c=>q(c).value=''); q('.mf_dif').innerHTML=''; }
+    catch(e){ q('.mf_dif').innerHTML='<span class="err">'+esc(e.message)+'</span>'; }
+    finally{ q('.mf_b').disabled=false; }
+  };
+}
+function tabelaManuais(L,remover){
+  if(!L.length) return '';
+  return `<table class="mini mt"><tr><th>Transportadora</th><th class="n">Calculado</th><th class="n">Informado</th><th class="n">Diferença</th><th>Prazo</th><th>Motivo</th><th>Referência / observação</th><th></th></tr>`+
+    L.map((m,i)=>`<tr><td>${esc(m.transportadora)}</td><td class="n">${+m.valor_calculado>0?brl(+m.valor_calculado):'—'}</td><td class="n">${brl(+m.valor_manual)}</td>
+      <td class="n">${difTxt(+m.valor_manual,+m.valor_calculado)}</td><td>${esc(m.prazo_manual||'')}</td><td class="small">${esc(m.motivo||'')}</td>
+      <td class="small">${esc([m.referencia,m.observacao].filter(Boolean).join(' · '))}${m.usuario?`<br>${esc(m.usuario)}`:''}</td>
+      <td>${remover?`<a href="#" class="small m_rem" data-i="${i}">remover</a>`:''}</td></tr>`).join('')+'</table>';
+}
+let MAN_PEND=[];
+function opcoesManual(){ return ULT?[...ULT.res.map(x=>({nome:x.t.transportadora,calc:+x.total.toFixed(2)})),...ULT.nao.map(n=>({nome:n.t.transportadora,calc:null}))]:[]; }
+function desenharManualCalc(){
+  if(!ULT||!ULT.res.length) return;
+  const op=opcoesManual(), chave=op.map(o=>o.nome+o.calc).join('|');
+  if($('m_form').dataset.chave!==chave){ $('m_form').dataset.chave=chave;
+    formManual($('m_form'),op,async m=>{ MAN_PEND.push(m); desenharListaPend(); }); }
+  // recalcula a diferença das pendentes com o cálculo atual
+  MAN_PEND.forEach(m=>{ const o=op.find(x=>x.nome===m.transportadora); m.valor_calculado=o?o.calc:null; });
+  desenharListaPend();
+}
+function desenharListaPend(){
+  $('m_lista').innerHTML=MAN_PEND.length?tabelaManuais(MAN_PEND,true)+'<div class="small">Será gravado junto com a cotação ao clicar em "Salvar cotação".</div>':'';
+  $('m_lista').querySelectorAll('.m_rem').forEach(a=>a.onclick=e=>{ e.preventDefault(); MAN_PEND.splice(+a.dataset.i,1); desenharListaPend(); });
+}
 
 // ---------- Bling: buscar pedido ----------
 async function iniciarBling(){
@@ -482,24 +538,27 @@ $('b_num').addEventListener('keydown',e=>{ if(e.key==='Enter') buscarPedidoBling
 
 let hTimer=null;
 $('h_busca').addEventListener('input',()=>{ clearTimeout(hTimer); hTimer=setTimeout(carregarHistorico,400); });
-$('h_atualizar').onclick=carregarHistorico;
+$('h_atualizar').onclick=carregarHistorico; $('h_manual').onchange=carregarHistorico; $('h_analise').onclick=analiseDivergencias;
 async function carregarHistorico(){
-  $('h_det').innerHTML='';
+  $('h_det').innerHTML=''; $('h_div').innerHTML='';
   if(!API_OK){ $('h_status').textContent='O histórico só funciona no site publicado (com login).'; $('h_tab').innerHTML=''; return; }
   $('h_status').textContent='Carregando…';
-  try{ const j=await api('/api/cotacoes?limite=200&busca='+encodeURIComponent($('h_busca').value.trim()));
+  try{ const j=await api('/api/cotacoes?limite=200&busca='+encodeURIComponent($('h_busca').value.trim())+($('h_manual').checked?'&manual=1':''));
     const L=j.cotacoes;
     $('h_status').textContent=L.length?`${L.length} cotação(ões)${L.length===200?' (mostrando as 200 mais recentes)':''}. Clique numa linha para ver o detalhe.`:'Nenhuma cotação encontrada.';
-    $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th></tr>'+
+    $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th><th class="n">Valor manual</th></tr>'+
       L.map(c=>`<tr class="lin" data-id="${c.id}"><td>${c.id}</td><td>${new Date(c.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</td><td class="small">${esc(c.usuario)}</td>
         <td>${esc(c.cliente||'')}${c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
         <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}${c.transportadora_escolhida&&c.transportadora_escolhida!==c.melhor_transportadora?`<br><span class="small">escolhida: ${esc(c.transportadora_escolhida)} (${brl(+c.valor_escolhido)})</span>`:''}</td>
-        <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td></tr>`).join(''):'';
+        <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td>
+        <td class="n small">${(c.manuais||[]).map(m=>`${esc(m.transportadora)}: ${brl(+m.valor_manual)}<br>${difTxt(+m.valor_manual,+m.valor_calculado)}`).join('<br>')||'—'}</td></tr>`).join(''):'';
     $('h_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>detalheHistorico(tr.dataset.id));
   }catch(e){ $('h_status').textContent='Erro ao carregar o histórico: '+e.message; }
 }
+const confirmarRemocao=()=>confirm('Remover este valor manual?');
 async function detalheHistorico(id){
-  $('h_det').innerHTML='<div class="card small">Carregando…</div>';
+  $('h_div').innerHTML='';
+  if(!$('h_det').innerHTML) $('h_det').innerHTML='<div class="card small">Carregando…</div>';
   try{ const c=await api('/api/cotacoes/'+id);
     const rs=c.resultados||[], nc=c.sem_cotacao||[];
     $('h_det').innerHTML=`<div class="card"><h2>Cotação nº ${c.id} · ${new Date(c.criado_em).toLocaleString('pt-BR')}</h2>
@@ -512,9 +571,45 @@ async function detalheHistorico(id){
       ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
       <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
       ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>
-      ${nc.length?`<p class="small">Sem cotação: ${nc.map(n=>esc(n.transportadora)).join(', ')}</p>`:''}</div>`;
+      ${nc.length?`<p class="small">Sem cotação: ${nc.map(n=>esc(n.transportadora)).join(', ')}</p>`:''}
+      <div class="manual"><div class="manual-tit">Valores cotados manualmente</div><div id="hm_lista">${tabelaManuais(c.valores_manuais||[],true)||'<p class="small">Nenhum valor manual registrado.</p>'}</div><div id="hm_form"></div></div></div>`;
+    if(c.motivos) MOTIVOS=c.motivos;
+    const L=c.valores_manuais||[];
+    const ligar=()=>$('hm_lista').querySelectorAll('.m_rem').forEach(a=>a.onclick=async e=>{ e.preventDefault();
+      if(!confirmarRemocao()) return; await api('/api/manuais/'+L[+a.dataset.i].id,{method:'DELETE'}); detalheHistorico(id); });
+    ligar();
+    formManual($('hm_form'),[...rs.map(r=>({nome:r.transportadora,calc:+r.total})),...nc.map(n=>({nome:n.transportadora,calc:null}))],async m=>{
+      await api(`/api/cotacoes/${id}/manual`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(m)}); await detalheHistorico(id); });
     $('h_det').scrollIntoView({behavior:'smooth'});
   }catch(e){ $('h_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
+}
+
+async function analiseDivergencias(){
+  $('h_det').innerHTML=''; $('h_div').innerHTML='<div class="card small">Carregando…</div>';
+  try{ const d=await api('/api/divergencias');
+    const pc=v=>v==null?'—':`${+v>0?'+':''}${(+v).toLocaleString('pt-BR',{maximumFractionDigits:1})}%`;
+    const res=(tit,L)=>L.length?`<h3>${tit}</h3><table class="mini"><tr><th>Grupo</th><th class="n">Casos</th><th class="n">Diferença média</th><th class="n">Média %</th><th class="n">Média absoluta %</th><th class="n">Menor / maior %</th><th class="n">Acima / abaixo</th></tr>`+
+      L.map(r=>`<tr><td>${esc(r.grupo)}</td><td class="n">${r.n}</td><td class="n">${brl(+r.media_dif)}</td><td class="n">${pc(r.media_pct)}</td><td class="n">${pc(r.media_abs_pct)}</td>
+        <td class="n">${pc(r.min_pct)} / ${pc(r.max_pct)}</td><td class="n">${r.acima} / ${r.abaixo}</td></tr>`).join('')+'</table>':'';
+    const L=d.linhas;
+    $('h_div').innerHTML=`<div class="card"><div class="hist-top"><h2 style="margin:0">Análise de divergências</h2><button class="btn btn2" id="d_csv">Baixar planilha (CSV)</button></div>
+      ${L.length?`<p class="small">${L.length} valor(es) manual(is) comparado(s) com o calculado. Diferença positiva = a transportadora cobrou mais que o sistema calculou.</p>
+      ${res('Por transportadora',d.por_transportadora)}${res('Por motivo informado',d.por_motivo)}${res('Por transportadora e UF',d.por_uf)}${res('Por transportadora e faixa de peso',d.por_peso)}
+      <h3>Casos</h3><div class="tbl-wrap"><table class="mini"><tr><th>Data</th><th>Cotação</th><th>Transportadora</th><th>Destino</th><th>Praça</th><th class="n">Peso</th><th class="n">NF</th><th class="n">Calculado</th><th class="n">Informado</th><th class="n">Diferença</th><th>Motivo</th><th>Obs.</th></tr>
+      ${L.map(m=>`<tr class="lin" data-id="${m.cotacao_id}"><td>${dataBR(m.criado_em)}</td><td>${m.cotacao_id}</td><td>${esc(m.transportadora)}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="small">${esc(m.praca||'')}</td>
+        <td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_nf)}</td><td class="n">${brl(+m.valor_calculado)}</td><td class="n">${brl(+m.valor_manual)}</td>
+        <td class="n">${difTxt(+m.valor_manual,+m.valor_calculado)}</td><td class="small">${esc(m.motivo||'')}</td><td class="small">${esc([m.referencia,m.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('')}</table></div>`
+      :'<p class="small">Ainda não há valores manuais registrados. Registre no painel "Salvar cotação" ou no detalhe de uma cotação do histórico.</p>'}
+      ${d.sem_calculo.length?`<h3>Transportadoras que o sistema não cotou (${d.sem_calculo.length})</h3><table class="mini"><tr><th>Data</th><th>Transportadora</th><th>Destino</th><th class="n">Peso</th><th class="n">Informado</th><th>Obs.</th></tr>`+
+        d.sem_calculo.map(m=>`<tr><td>${dataBR(m.criado_em)}</td><td>${esc(m.transportadora)}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_manual)}</td><td class="small">${esc(m.observacao||'')}</td></tr>`).join('')+'</table>':''}</div>`;
+    $('h_div').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{ $('h_div').innerHTML=''; $('h_det').innerHTML=''; detalheHistorico(tr.dataset.id); });
+    const b=$('d_csv'); if(b) b.onclick=()=>{
+      const cols=['cotacao_id','criado_em','usuario','transportadora','cidade','uf','cep','praca','peso_real','peso_taxado','valor_nf','volumes','com_icms','valor_calculado','valor_manual','diferenca','diferenca_pct','prazo_manual','motivo','referencia','observacao','cliente','pedido'];
+      const cel=v=>{ v=v==null?'':String(v); if(/^-?\d+(\.\d+)?$/.test(v)) v=v.replace('.',','); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+      const csv='﻿'+cols.join(';')+'\n'+L.map(m=>cols.map(c=>cel(m[c])).join(';')).join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='divergencias-frete.csv'; a.click(); };
+    $('h_div').scrollIntoView({behavior:'smooth'});
+  }catch(e){ $('h_div').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 
 renderTab(); setDest({uf:'SP',cidade:'CAMPINAS'});

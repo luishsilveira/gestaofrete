@@ -159,4 +159,28 @@ t('cotação salva com proposta', r.status === 201);
 r = await api('/api/bling/propostas');
 t('proposta mostra a cotação', r.j.propostas[0].cotacao_id && +r.j.propostas[0].melhor_valor === 300);
 
+// ---------- valores manuais e divergências
+r = await api('/api/cotacoes', 'POST', { uf: 'AL', cidade: 'Pão de Açúcar', peso_real: 120, valor_nf: 2000,
+  resultados: [{ transportadora: 'Bento', total: 300, praca: 'AL interior' }, { transportadora: 'Braspress', total: 350 }],
+  sem_cotacao: [{ transportadora: 'TJB' }],
+  valores_manuais: [{ transportadora: 'Bento', valor_manual: 330, motivo: 'ICMS', referencia: 'cot 999' }, { transportadora: 'X', valor_manual: 0 }] });
+const idc = r.j.id;
+t('cotação salva com valor manual', r.status === 201 && r.j.valores_manuais === 1);
+r = await api(`/api/cotacoes/${idc}/manual`, 'POST', { transportadora: 'Braspress', valor_manual: 340, motivo: 'Desconto ou negociação' });
+t('valor manual adicionado depois', r.status === 201 && +r.j.valor_calculado === 350);
+r = await api(`/api/cotacoes/${idc}/manual`, 'POST', { transportadora: 'TJB', valor_manual: 280 });
+t('manual de transportadora sem cálculo', r.status === 201 && r.j.valor_calculado === null);
+t('manual sem valor recusado', (await api(`/api/cotacoes/${idc}/manual`, 'POST', { transportadora: 'Bento' })).status === 400);
+r = await api(`/api/cotacoes/${idc}`);
+t('detalhe traz manuais', r.j.valores_manuais.length === 3 && r.j.motivos.length > 3);
+r = await api('/api/cotacoes?manual=1');
+t('filtro só com manual', r.j.cotacoes.length === 1 && r.j.cotacoes[0].manuais.length === 3);
+r = await api('/api/divergencias');
+const bento = r.j.por_transportadora.find((x) => x.grupo === 'Bento');
+t('divergência Bento +10%', +bento.media_pct === 10 && +bento.media_dif === 30 && r.j.linhas.find((x) => x.transportadora === 'Bento').praca === 'AL interior');
+t('resumos por UF, peso e motivo', r.j.por_uf.some((x) => x.grupo === 'Bento · AL') && r.j.por_peso.some((x) => x.grupo === 'Bento · 101 a 200 kg') && r.j.por_motivo.length === 2);
+t('sem cálculo separado', r.j.sem_calculo.length === 1 && r.j.linhas.length === 2);
+const idm = r.j.sem_calculo[0].id;
+t('remover manual', (await api(`/api/manuais/${idm}`, 'DELETE')).status === 200 && (await api(`/api/cotacoes/${idc}`)).j.valores_manuais.length === 2);
+
 console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);

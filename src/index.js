@@ -36,6 +36,26 @@ CREATE TABLE IF NOT EXISTS cotacoes (
 CREATE INDEX IF NOT EXISTS cotacoes_criado_em_idx ON cotacoes (criado_em DESC);
 `;
 
+// Valores cotados fora do sistema (site, e-mail ou telefone da transportadora, CT-e) para conferir divergências.
+const SCHEMA_MANUAL = `
+CREATE TABLE IF NOT EXISTS cotacao_valores_manuais (
+  id               BIGSERIAL PRIMARY KEY,
+  cotacao_id       BIGINT NOT NULL REFERENCES cotacoes(id) ON DELETE CASCADE,
+  transportadora   TEXT NOT NULL,
+  valor_calculado  NUMERIC(14,2),
+  valor_manual     NUMERIC(14,2) NOT NULL,
+  prazo_manual     TEXT,
+  referencia       TEXT,
+  motivo           TEXT,
+  observacao       TEXT,
+  usuario          TEXT NOT NULL,
+  criado_em        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cvm_cotacao_idx ON cotacao_valores_manuais (cotacao_id);
+`;
+export const MOTIVOS = ['Não identificado', 'Tabela desatualizada / reajuste', 'Taxa não prevista (TDE, TDA, agendamento…)',
+  'Praça ou cidade diferente', 'ICMS', 'Peso ou cubagem diferente', 'Valor da NF diferente', 'Desconto ou negociação', 'Outro'];
+
 let esquemaPronto = false;
 
 const json = (dados, status = 200) =>
@@ -55,6 +75,7 @@ async function comBanco(env, ctx, fn) {
       await client.query(SCHEMA);
       await client.query(SCHEMA_BLING);
       await client.query(SCHEMA_DOCS);
+      await client.query(SCHEMA_MANUAL);
       esquemaPronto = true;
     }
     return await fn(client);
@@ -77,8 +98,9 @@ async function salvarCotacao(request, env, ctx, usuario) {
     return json({ erro: 'Cotação grande demais.' }, 413);
   }
   const melhor = c.resultados[0];
-  const linha = await comBanco(env, ctx, (db) =>
-    db.query(
+  const manuais = (Array.isArray(c.valores_manuais) ? c.valores_manuais : []).filter((m) => numero(m.valor_manual) > 0).slice(0, 20);
+  const linha = await comBanco(env, ctx, async (db) => {
+    const r = await db.query(
       `INSERT INTO cotacoes (usuario, cliente, pedido, observacao, cep, cidade, uf,
          peso_real, peso_taxado, valor_nf, volumes, m3, com_icms, regra_tonelada,
          melhor_transportadora, melhor_valor, melhor_prazo, resultados, sem_cotacao, versao_app,
@@ -111,26 +133,103 @@ async function salvarCotacao(request, env, ctx, usuario) {
         numero(c.valor_escolhido),
         numero(c.bling_proposta_id),
       ],
-    ),
-  );
-  return json({ ok: true, ...linha.rows[0] }, 201);
+    );
+    for (const m of manuais) await inserirManual(db, r.rows[0].id, m, c.resultados, usuario);
+    return r;
+  });
+  return json({ ok: true, ...linha.rows[0], valores_manuais: manuais.length }, 201);
+}
+
+async function inserirManual(db, cotacaoId, m, resultados, usuario) {
+  const transp = texto(m.transportadora, 80);
+  if (!transp || !(numero(m.valor_manual) > 0)) throw Object.assign(new Error('Informe a transportadora e o valor.'), { status: 400 });
+  // valor calculado pelo sistema para a mesma transportadora (nulo se o sistema não cotou)
+  const calc = (resultados || []).find((x) => x.transportadora === transp);
+  return (await db.query(
+    `INSERT INTO cotacao_valores_manuais (cotacao_id, transportadora, valor_calculado, valor_manual, prazo_manual, referencia, motivo, observacao, usuario)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [cotacaoId, transp, calc ? numero(calc.total) : null, numero(m.valor_manual), texto(m.prazo_manual, 30),
+     texto(m.referencia, 80), texto(m.motivo, 80), texto(m.observacao, 500), usuario])).rows[0];
+}
+
+async function adicionarManual(id, request, env, ctx, usuario) {
+  let m; try { m = await request.json(); } catch { return json({ erro: 'Corpo da requisição inválido.' }, 400); }
+  try {
+    const r = await comBanco(env, ctx, async (db) => {
+      const c = await db.query('SELECT resultados FROM cotacoes WHERE id = $1', [id]);
+      if (!c.rows.length) return null;
+      return inserirManual(db, id, m, c.rows[0].resultados, usuario);
+    });
+    return r ? json(r, 201) : json({ erro: 'Cotação não encontrada.' }, 404);
+  } catch (e) { if (e.status === 400) return json({ erro: e.message }, 400); throw e; }
+}
+
+async function alterarManual(id, request, env, ctx) {
+  if (request.method === 'DELETE') {
+    await comBanco(env, ctx, (db) => db.query('DELETE FROM cotacao_valores_manuais WHERE id = $1', [id]));
+    return json({ ok: true });
+  }
+  let m; try { m = await request.json(); } catch { return json({ erro: 'Corpo da requisição inválido.' }, 400); }
+  const r = await comBanco(env, ctx, (db) => db.query(
+    `UPDATE cotacao_valores_manuais SET motivo = $2, observacao = $3, referencia = COALESCE($4, referencia) WHERE id = $1 RETURNING *`,
+    [id, texto(m.motivo, 80), texto(m.observacao, 500), texto(m.referencia, 80)]));
+  return r.rows.length ? json(r.rows[0]) : json({ erro: 'Valor não encontrado.' }, 404);
+}
+
+// Divergências: cada valor manual com o contexto da cotação, e resumos por transportadora, UF, faixa de peso e motivo.
+async function divergencias(url, env, ctx) {
+  const params = [], cond = ['m.valor_calculado IS NOT NULL'];
+  const de = url.searchParams.get('de'), ate = url.searchParams.get('ate'), tr = url.searchParams.get('transportadora');
+  if (de) { params.push(de); cond.push(`c.criado_em >= $${params.length}::date`); }
+  if (ate) { params.push(ate); cond.push(`c.criado_em < $${params.length}::date + 1`); }
+  if (tr) { params.push(tr); cond.push(`m.transportadora = $${params.length}`); }
+  const base = `
+    SELECT m.*, c.criado_em AS cotado_em, c.cliente, c.pedido, c.cep, c.cidade, c.uf, c.peso_real, c.peso_taxado, c.valor_nf,
+           c.volumes, c.com_icms, c.regra_tonelada, c.versao_app,
+           (SELECT r->>'praca' FROM jsonb_array_elements(c.resultados) r WHERE r->>'transportadora' = m.transportadora LIMIT 1) AS praca,
+           m.valor_manual - m.valor_calculado AS diferenca,
+           ROUND((m.valor_manual - m.valor_calculado) / NULLIF(m.valor_calculado, 0) * 100, 2) AS diferenca_pct,
+           CASE WHEN c.peso_real <= 50 THEN 'até 50 kg' WHEN c.peso_real <= 100 THEN '51 a 100 kg' WHEN c.peso_real <= 200 THEN '101 a 200 kg'
+                WHEN c.peso_real <= 500 THEN '201 a 500 kg' ELSE 'acima de 500 kg' END AS faixa_peso
+      FROM cotacao_valores_manuais m JOIN cotacoes c ON c.id = m.cotacao_id
+     WHERE ${cond.join(' AND ')}`;
+  const resumo = (grupo) => `
+    SELECT ${grupo} AS grupo, COUNT(*) AS n, ROUND(AVG(diferenca), 2) AS media_dif, ROUND(AVG(diferenca_pct), 2) AS media_pct,
+           ROUND(AVG(ABS(diferenca_pct)), 2) AS media_abs_pct, MIN(diferenca_pct) AS min_pct, MAX(diferenca_pct) AS max_pct,
+           COUNT(*) FILTER (WHERE diferenca > 0.01) AS acima, COUNT(*) FILTER (WHERE diferenca < -0.01) AS abaixo
+      FROM (${base}) d GROUP BY 1 ORDER BY 2 DESC, 1`;
+  const r = await comBanco(env, ctx, (db) => Promise.all([
+    db.query(base + ' ORDER BY m.criado_em DESC LIMIT 2000', params),
+    db.query(resumo('transportadora'), params),
+    db.query(resumo(`transportadora || ' · ' || uf`), params),
+    db.query(resumo(`transportadora || ' · ' || faixa_peso`), params),
+    db.query(resumo(`COALESCE(motivo, 'Sem motivo informado')`), params),
+    db.query(`SELECT m.*, c.criado_em AS cotado_em, c.cidade, c.uf, c.peso_real, c.valor_nf FROM cotacao_valores_manuais m
+                JOIN cotacoes c ON c.id = m.cotacao_id WHERE m.valor_calculado IS NULL ORDER BY m.criado_em DESC LIMIT 500`),
+  ]));
+  return json({ linhas: r[0].rows, por_transportadora: r[1].rows, por_uf: r[2].rows, por_peso: r[3].rows, por_motivo: r[4].rows,
+    sem_calculo: r[5].rows, motivos: MOTIVOS });
 }
 
 async function listarCotacoes(url, env, ctx) {
   const limite = Math.min(Math.max(parseInt(url.searchParams.get('limite') || '100', 10) || 100, 1), 500);
   const busca = (url.searchParams.get('busca') || '').trim();
-  const params = [limite];
-  let filtro = '';
+  const params = [limite], cond = [];
   if (busca) {
     params.push(`%${busca}%`);
-    filtro = `WHERE cidade ILIKE $2 OR cliente ILIKE $2 OR pedido ILIKE $2 OR usuario ILIKE $2
-              OR melhor_transportadora ILIKE $2 OR cep ILIKE $2`;
+    cond.push(`(cidade ILIKE $2 OR cliente ILIKE $2 OR pedido ILIKE $2 OR usuario ILIKE $2
+              OR melhor_transportadora ILIKE $2 OR cep ILIKE $2)`);
   }
+  if (url.searchParams.get('manual') === '1') cond.push('EXISTS (SELECT 1 FROM cotacao_valores_manuais m WHERE m.cotacao_id = cotacoes.id)');
+  const filtro = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
   const r = await comBanco(env, ctx, (db) =>
     db.query(
       `SELECT id, criado_em, usuario, cliente, pedido, cep, cidade, uf, peso_real, peso_taxado,
               valor_nf, volumes, com_icms, melhor_transportadora, melhor_valor, melhor_prazo,
-              transportadora_escolhida, valor_escolhido, bling_pedido_id
+              transportadora_escolhida, valor_escolhido, bling_pedido_id,
+              (SELECT json_agg(json_build_object('transportadora', m.transportadora, 'valor_manual', m.valor_manual,
+                        'valor_calculado', m.valor_calculado) ORDER BY m.id)
+                 FROM cotacao_valores_manuais m WHERE m.cotacao_id = cotacoes.id) AS manuais
          FROM cotacoes ${filtro}
         ORDER BY criado_em DESC
         LIMIT $1`,
@@ -323,9 +422,11 @@ async function blingItens(url, env, ctx) {
 }
 
 async function obterCotacao(id, env, ctx) {
-  const r = await comBanco(env, ctx, (db) => db.query('SELECT * FROM cotacoes WHERE id = $1', [id]));
+  const [r, m] = await comBanco(env, ctx, (db) => Promise.all([
+    db.query('SELECT * FROM cotacoes WHERE id = $1', [id]),
+    db.query('SELECT * FROM cotacao_valores_manuais WHERE cotacao_id = $1 ORDER BY id', [id])]));
   if (!r.rows.length) return json({ erro: 'Cotação não encontrada.' }, 404);
-  return json(r.rows[0]);
+  return json({ ...r.rows[0], valores_manuais: m.rows, motivos: MOTIVOS });
 }
 
 // Tarefa agendada (wrangler.jsonc → triggers.crons, a cada 5 min): importa os pedidos do Bling
@@ -371,6 +472,12 @@ export default {
       if (url.pathname === '/api/bling/itens') return await blingItens(url, env, ctx);
       const m = url.pathname.match(/^\/api\/cotacoes\/(\d+)$/);
       if (m && request.method === 'GET') return await obterCotacao(m[1], env, ctx);
+      const mm = url.pathname.match(/^\/api\/cotacoes\/(\d+)\/manual$/);
+      if (mm && request.method === 'POST') return await adicionarManual(mm[1], request, env, ctx, usuario);
+      const mv = url.pathname.match(/^\/api\/manuais\/(\d+)$/);
+      if (mv && (request.method === 'DELETE' || request.method === 'PATCH')) return await alterarManual(mv[1], request, env, ctx);
+      if (url.pathname === '/api/divergencias' && request.method === 'GET') return await divergencias(url, env, ctx);
+      if (url.pathname === '/api/motivos') return json({ motivos: MOTIVOS });
       return json({ erro: 'Rota não encontrada.' }, 404);
     } catch (e) {
       if (e instanceof BlingErro) return json({ erro: e.message, codigo: e.codigo }, e.status);

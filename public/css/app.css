@@ -96,3 +96,16 @@ table.mini{font-size:12px;margin:2px 0 8px;background:#fff}
 .canal{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;white-space:nowrap}
 .canal-cd{background:#eee;color:#555}.canal-ml{background:#fff3c4;color:#7a5a00}.canal-mk{background:#e6eef8;color:#2b5b8f}
 select.hide{display:none}
+
+.manual{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.manual-tit{font-weight:500;font-size:14px;margin-bottom:4px}
+.mform{display:grid;grid-template-columns:2fr 1fr 0.7fr 1.2fr 1.6fr;gap:0 10px;align-items:end}
+.mform .mf_obs{grid-column:1/5}
+.mform .mf_acao{padding-bottom:1px}
+.mf_dif{margin-top:6px}
+table.mt{margin-top:10px}
+.dif-pos{color:#b3261e;font-weight:500}.dif-neg{color:var(--acc);font-weight:500}
+#h_div .card{margin-top:14px}
+#h_div h3{font-size:14px;margin:18px 0 6px}
+#h_div tr.lin{cursor:pointer}
+@media(max-width:800px){.mform{grid-template-columns:1fr 1fr}.mform .mf_obs{grid-column:1/3}}

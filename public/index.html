@@ -69,6 +69,8 @@
 </div>
 <label>Observação (opcional)</label><input id="s_obs" maxlength="500">
 <label>Transportadora escolhida</label><select id="s_transp"></select>
+<div class="manual"><div class="manual-tit">Valor cotado manualmente <span class="small">(opcional – use quando a transportadora informar um valor diferente do calculado)</span></div>
+<div id="m_form"></div><div id="m_lista"></div></div>
 <div class="salvar-acao"><button class="btn" id="s_btn">Salvar cotação</button><button class="btn btn2" id="s_copiar">Copiar valor do frete</button><span class="small" id="s_status"></span></div>
 </div>
 <div class="note" id="avisos"></div>
@@ -110,10 +112,12 @@
 <div class="card">
 <div class="hist-top"><h2 style="margin:0">Cotações salvas</h2>
 <input id="h_busca" placeholder="Buscar por cidade, cliente, pedido, usuário, transportadora ou CEP" style="max-width:460px">
-<button class="btn" id="h_atualizar">Atualizar</button></div>
+<label class="chk" style="margin:0"><input type="checkbox" id="h_manual"> Só com valor manual</label>
+<button class="btn" id="h_atualizar">Atualizar</button><button class="btn btn2" id="h_analise">Análise de divergências</button></div>
 <div class="small" id="h_status" style="margin:10px 0"></div>
 <div class="tbl-wrap"><table id="h_tab"></table></div>
 <div id="h_det"></div>
+<div id="h_div"></div>
 </div>
 </section>
 
