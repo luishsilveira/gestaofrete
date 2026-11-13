@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={};
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; const VERSAO='1.2';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -187,7 +187,7 @@ function cotar(t,r,p,nf,uf,op,rvx={}){
 }
 
 function calc(){
-  if(dest.invalido){ $('destinfo').innerHTML='CEP não encontrado nos Correios. Confira o número ou digite a cidade.'; $('out').innerHTML=''; $('avisos').innerHTML=''; return; }
+  if(dest.invalido){ ULT=null; $('salvar').classList.add('hide'); $('destinfo').innerHTML='CEP não encontrado nos Correios. Confira o número ou digite a cidade.'; $('out').innerHTML=''; $('avisos').innerHTML=''; return; }
   const uf=dest.uf, peso=+$('peso').value||0, nf=+$('nf').value||0;
   let m3=+$('m3').value||0; const dim=(+$('c').value)*(+$('l').value)*(+$('a').value)*(+$('qv').value||1);
   if(dim>0) m3=dim;
@@ -204,6 +204,9 @@ function calc(){
     if(t.id==='tjb') op.int=/interior/i.test(r.regiao);
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
   res.sort((a,b)=>a.total-b.total);
+  ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
+  $('salvar').classList.toggle('hide',!res.length||!API_OK);
+  if(res.length) $('s_status').textContent='';
   const simples=$('simples').checked;
   $('out').classList.toggle('simple',simples); $('avisos').classList.toggle('hide',simples);
   if(simples){
@@ -246,7 +249,7 @@ function calc(){
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal'].forEach(id=>$(id).addEventListener('input',calc));
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t));});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico();});
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
 function renderTab(){
@@ -282,5 +285,62 @@ function renderTab(){
 $('tsel').onchange=renderTab;
 $('js').textContent=JSON.stringify(TABELAS,null,1);
 $('cp').onclick=()=>navigator.clipboard.writeText(JSON.stringify(TABELAS,null,1)).then(()=>$('cpok').textContent='Copiado.').catch(()=>$('cpok').textContent='Não foi possível copiar; selecione o texto abaixo.');
+// ---------- API: usuário, salvar cotação e histórico ----------
+const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):'';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
+api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); })
+  .catch(()=>{ API_OK=false; });
+$('s_btn').onclick=async()=>{
+  if(!ULT||!ULT.res.length) return;
+  const b=$('s_btn'); b.disabled=true; $('s_status').className='small'; $('s_status').textContent='Salvando…';
+  const corpo={cliente:$('s_cliente').value.trim(),pedido:$('s_pedido').value.trim(),observacao:$('s_obs').value.trim(),
+    cep:fmtCep(dest.cep),cidade:dest.cidade||'',uf:ULT.uf,peso_real:ULT.peso,peso_taxado:ULT.pt,valor_nf:ULT.nf,
+    volumes:+$('qv').value||null,m3:ULT.m3,com_icms:ULT.icms,regra_tonelada:tonMode,versao_app:VERSAO,
+    resultados:ULT.res.map(x=>({transportadora:x.t.transportadora,praca:x.r.regiao,fonte_praca:x.rv.txt,total:+x.total.toFixed(2),
+      prazo:String(x.rv.prazo||x.r.prazo||''),peso_taxado:x.pT,subtotal:+x.sub.toFixed(2),icms:+x.icms.toFixed(2),
+      itens:x.it.map(i=>({n:i.n,v:+i.v.toFixed(2),d:i.d}))})),
+    sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
+  try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
+    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva.`;
+  }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
+  finally{ b.disabled=false; }
+};
+let hTimer=null;
+$('h_busca').addEventListener('input',()=>{ clearTimeout(hTimer); hTimer=setTimeout(carregarHistorico,400); });
+$('h_atualizar').onclick=carregarHistorico;
+async function carregarHistorico(){
+  $('h_det').innerHTML='';
+  if(!API_OK){ $('h_status').textContent='O histórico só funciona no site publicado (com login).'; $('h_tab').innerHTML=''; return; }
+  $('h_status').textContent='Carregando…';
+  try{ const j=await api('/api/cotacoes?limite=200&busca='+encodeURIComponent($('h_busca').value.trim()));
+    const L=j.cotacoes;
+    $('h_status').textContent=L.length?`${L.length} cotação(ões)${L.length===200?' (mostrando as 200 mais recentes)':''}. Clique numa linha para ver o detalhe.`:'Nenhuma cotação encontrada.';
+    $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th></tr>'+
+      L.map(c=>`<tr class="lin" data-id="${c.id}"><td>${c.id}</td><td>${new Date(c.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</td><td class="small">${esc(c.usuario)}</td>
+        <td>${esc(c.cliente||'')}${c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
+        <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}</td>
+        <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td></tr>`).join(''):'';
+    $('h_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>detalheHistorico(tr.dataset.id));
+  }catch(e){ $('h_status').textContent='Erro ao carregar o histórico: '+e.message; }
+}
+async function detalheHistorico(id){
+  $('h_det').innerHTML='<div class="card small">Carregando…</div>';
+  try{ const c=await api('/api/cotacoes/'+id);
+    const rs=c.resultados||[], nc=c.sem_cotacao||[];
+    $('h_det').innerHTML=`<div class="card"><h2>Cotação nº ${c.id} · ${new Date(c.criado_em).toLocaleString('pt-BR')}</h2>
+      <div class="kv"><div>Usuário</div><div>${esc(c.usuario)}</div><div>Cliente / pedido</div><div>${esc(c.cliente||'—')} ${c.pedido?'#'+esc(c.pedido):''}</div>
+      <div>Destino</div><div>${esc(c.cidade)}/${esc(c.uf)} ${esc(c.cep||'')}</div>
+      <div>Carga</div><div>${(+c.peso_real).toLocaleString('pt-BR')} kg real · ${(+c.peso_taxado).toLocaleString('pt-BR')} kg taxado · NF ${brl(+c.valor_nf)}${c.volumes?' · '+c.volumes+' volume(s)':''}</div>
+      <div>Regras</div><div>${c.com_icms?'com ICMS':'sem ICMS'} · tonelada: ${c.regra_tonelada==='tot'?'peso total':'excedente'}</div>
+      ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
+      <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
+      ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>
+      ${nc.length?`<p class="small">Sem cotação: ${nc.map(n=>esc(n.transportadora)).join(', ')}</p>`:''}</div>`;
+    $('h_det').scrollIntoView({behavior:'smooth'});
+  }catch(e){ $('h_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
+}
+
 renderTab(); setDest({uf:'SP',cidade:'CAMPINAS'});
 }

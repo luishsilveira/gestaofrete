@@ -1,9 +1,17 @@
 {
-  // Site estático da calculadora de frete (Cloudflare Workers + Static Assets)
+  // Calculadora de frete: site estático (public/) + API do histórico (src/index.js)
   "name": "gestaofrete",
+  "main": "src/index.js",
   "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./public",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  // Banco PostgreSQL (Aiven) via Hyperdrive. O ID não é segredo: usuário e senha ficam guardados no Cloudflare.
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "1b439f9434264ddfa7b480e4cbe78be6" }
+  ],
+  "observability": { "enabled": true }
 }

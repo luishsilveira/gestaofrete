@@ -7,7 +7,9 @@ Site estático: não tem servidor nem banco de dados. Todo o cálculo roda no na
 ## Estrutura
 
 ```
-wrangler.jsonc                            configuração do Cloudflare Workers (publica a pasta public/)
+wrangler.jsonc                            configuração do Cloudflare Workers (site + API + banco)
+package.json                              dependências do servidor (driver PostgreSQL "pg")
+src/index.js                              servidor: API do histórico de cotações (/api/*)
 public/index.html                         página
 public/css/app.css                        estilos
 public/js/app.js                          motor de cálculo e telas
@@ -35,6 +37,17 @@ public/_headers                           cache (dados sempre atualizados)
 3. **Comparação de nomes:** a comparação ignora acentos e pontuação ("D'Oeste" = "D Oeste").
 4. **Escolha automática da praça:** nas transportadoras sem lista de cidades, a ordem é: praça com o nome da cidade, capital e primeira praça do interior (marcada "a confirmar"). Praças com `"naoAuto": true` no JSON nunca são escolhidas automaticamente. É o caso da Braspress SP (Imp), que fica pendente de confirmação.
 
+## Histórico de cotações (banco de dados)
+
+- **Banco:** PostgreSQL no Aiven, acessado pelo **Cloudflare Hyperdrive** (configuração `gestaofrete-db`). Usuário e senha ficam só no Cloudflare. O `wrangler.jsonc` guarda apenas o ID da configuração, que não é segredo.
+- **Tabela:** `cotacoes`, criada automaticamente no primeiro acesso. Cada linha guarda o usuário, o cliente, o pedido, o destino, a carga, as regras usadas, a melhor opção e o resultado completo de cada transportadora (coluna `resultados`, JSONB, com o detalhamento das cobranças).
+- **Usuário:** o e-mail do login do Cloudflare Access, enviado pelo cabeçalho `cf-access-authenticated-user-email`.
+- **API:**
+  - `GET /api/eu`: usuário logado
+  - `POST /api/cotacoes`: salva uma cotação
+  - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
+  - `GET /api/cotacoes/{id}`: detalhe completo
+
 ## Como atualizar uma tabela
 
 1. A transportadora envia a tabela nova (PDF ou Excel).
@@ -48,7 +61,7 @@ Para incluir uma transportadora nova, crie o JSON em `public/dados/transportador
 
 ## Testar localmente
 
-O site carrega os dados com `fetch`, por isso não funciona abrindo o `index.html` direto do disco. Use um servidor local:
+O site carrega os dados com `fetch`, por isso não funciona abrindo o `index.html` direto do disco. Use um servidor local (sem a API, o histórico fica desativado):
 
 ```
 cd public
@@ -59,6 +72,6 @@ Depois abra http://localhost:8000
 
 ## Publicação
 
-- Hospedagem: Cloudflare Workers (Static Assets), ligado a este repositório (branch `main`). Build command: vazio. Deploy command: `npx wrangler deploy`. O `wrangler.jsonc` publica a pasta `public/`.
+- Hospedagem: Cloudflare Workers (site estático em `public/` + servidor em `src/index.js`), ligado a este repositório (branch `main`). Deploy command: `npx wrangler deploy`. As dependências do `package.json` são instaladas no build.
 - Acesso: Cloudflare Access, com login por código enviado ao e-mail.
 - Domínio: subdomínio do cliente (ex.: `frete.proloplast.com.br`).

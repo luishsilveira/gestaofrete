@@ -11,7 +11,7 @@
 <header>
 <h1>Cotação de Frete – Proloplast</h1>
 <p class="sub" id="subt">Carregando tabelas…</p>
-<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="json">Modelo de dados</button></nav>
+<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="hist">Histórico</button><button data-t="json">Modelo de dados</button></nav>
 </header>
 <main>
 <section id="calc">
@@ -55,6 +55,14 @@
 <div>
 <div class="card" style="padding:12px 18px;margin-bottom:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="flex:1"><span class="small">Peso taxado (maior entre real e cubado a 300 kg/m³): </span><b class="mono" id="pt"></b></div><label class="chk" style="margin:0;font-weight:500"><input type="checkbox" id="simples" checked> Visão simplificada (só valor e prazo)</label></div>
 <div class="res" id="out"></div>
+<div class="card salvar hide" id="salvar">
+<div class="row2">
+<div><label>Cliente (opcional)</label><input id="s_cliente" maxlength="120" placeholder="Nome do cliente"></div>
+<div><label>Nº do pedido (opcional)</label><input id="s_pedido" maxlength="40" placeholder="Ex.: 12345"></div>
+</div>
+<label>Observação (opcional)</label><input id="s_obs" maxlength="500">
+<div class="salvar-acao"><button class="btn" id="s_btn">Salvar cotação</button><span class="small" id="s_status"></span></div>
+</div>
 <div class="note" id="avisos"></div>
 </div>
 </div>
@@ -65,6 +73,17 @@
 <label>Transportadora</label>
 <select id="tsel" style="max-width:360px"></select>
 <div id="tview" style="margin-top:16px"></div>
+</div>
+</section>
+
+<section id="hist" class="hide">
+<div class="card">
+<div class="hist-top"><h2 style="margin:0">Cotações salvas</h2>
+<input id="h_busca" placeholder="Buscar por cidade, cliente, pedido, usuário, transportadora ou CEP" style="max-width:460px">
+<button class="btn" id="h_atualizar">Atualizar</button></div>
+<div class="small" id="h_status" style="margin:10px 0"></div>
+<div class="tbl-wrap"><table id="h_tab"></table></div>
+<div id="h_det"></div>
 </div>
 </section>
 
