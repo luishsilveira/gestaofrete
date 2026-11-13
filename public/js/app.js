@@ -60,7 +60,7 @@ async function consultaCep(cep8){
   try{ const j=await buscaJSON(`https://viacep.com.br/ws/${cep8}/json/`);
     if(j&&!j.erro&&j.localidade) res={cidade:j.localidade,uf:j.uf,ibge:j.ibge,fonte:'ViaCEP'};
     else if(j&&j.erro) res={inexistente:true}; }catch(e){}
-  if(!res){ try{ const j=await buscaJSON(`https://brasilapi.com.br/api/cep/v2/${cep8}`);
+  if(!res||res.inexistente){ try{ const j=await buscaJSON(`https://brasilapi.com.br/api/cep/v2/${cep8}`);
     if(j&&j.city) res={cidade:j.city,uf:j.state,fonte:'BrasilAPI'}; }catch(e){} }
   if(res&&!res.inexistente) CEPCACHE.set(cep8,res);
   return res;
@@ -71,15 +71,15 @@ $('cep').addEventListener('input',async()=>{ const dg=$('cep').value.replace(/\D
   const seq=++cepSeq; $('destinfo').innerHTML='Consultando CEP…';
   const r=await consultaCep(dg.slice(0,8));
   if(seq!==cepSeq) return; // o usuário já digitou outro CEP
-  if(r&&r.inexistente){ dest={uf:ufc,cidade:'',invalido:true}; $('cid').value=''; calc(); return; }
-  if(r&&r.uf){ setDest({uf:r.uf,cidade:norm(r.cidade),cep:n,ibge:r.ibge,fonteCep:r.fonte},'cep'); return; }
+  if(r&&r.uf&&!r.inexistente){ setDest({uf:r.uf,cidade:norm(r.cidade),cep:n,ibge:r.ibge,fonteCep:r.fonte},'cep'); return; }
   // reserva: listas das transportadoras
   let best=null; const chk=(c,uf,a,b)=>{ if(uf!==ufc||ufDoCep(a)!==uf||ufDoCep(b)!==uf) return; if(n>=a&&n<=b&&(!best||b-a<best.w)) best={c,uf,w:b-a}; };
   D.rtemap.forEach(x=>{ for(let i=0;i<x[5].length;i+=2) chk(x[0],x[1],x[5][i],x[5][i+1]); });
   D.tbmap.forEach(x=>chk(x[0],x[1],x[3],x[4]));
   D.smmap.forEach(x=>chk(x[0],x[1],x[3],x[4]));
-  if(best) setDest({uf:best.uf,cidade:best.c,cep:n},'cep');
-  else { setDest({uf:ufc,cidade:'',cep:n,semLista:true},'cep'); } });
+  const naoCorreios=!!(r&&r.inexistente);
+  if(best) setDest({uf:best.uf,cidade:best.c,cep:n,naoCorreios},'cep');
+  else { setDest({uf:ufc,cidade:'',cep:n,semLista:true,naoCorreios},'cep'); } });
 
 // resolve a praça de cada transportadora
 function resolver(t){
@@ -194,7 +194,7 @@ function calc(){
   const pt=Math.max(peso,m3*300);
   const ptDe=t=>(t.isentoCubM3&&m3<=t.isentoCubM3)?peso:Math.max(peso,m3*(t.cubagem||300));
   $('pt').textContent=pt.toLocaleString('pt-BR',{maximumFractionDigits:2})+' kg'+(m3>0?`  (cubado: ${(m3*300).toLocaleString('pt-BR',{maximumFractionDigits:2})} kg)`:'');
-  $('destinfo').innerHTML=dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}${dest.fonteCep?` <span class="small">(cidade confirmada pelos Correios via ${dest.fonteCep})</span>`:(dest.cep?' <span class="small">(cidade pelas listas das transportadoras; consulta aos Correios indisponível)</span>':'')}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
+  $('destinfo').innerHTML=dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}${dest.fonteCep?` <span class="small">(cidade confirmada pelos Correios via ${dest.fonteCep})</span>`:(dest.cep?` <span class="small">(cidade pela faixa de CEP das listas das transportadoras; ${dest.naoCorreios?'os Correios não reconheceram este CEP, confira o número':'consulta aos Correios indisponível'})</span>`:'')}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
   const op={tde:$('o_tde').checked,tda:$('o_tda').checked,trt:$('o_trt').checked,ag:$('o_ag').checked,pal:$('o_pal').checked,int:false,icms:$('icms').checked};
   $('icmsinfo').textContent=op.icms?`Alíquota aplicada RS → ${uf}: ${aliqICMS(uf)}%`:'Valores sem ICMS';
   const res=[], nao=[];
