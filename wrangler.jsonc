@@ -14,6 +14,9 @@
     { "binding": "HYPERDRIVE", "id": "1b439f9434264ddfa7b480e4cbe78be6" }
   ],
   "observability": { "enabled": true },
+  // Tarefa agendada (horário UTC): 09h e 21h UTC = 06h e 18h em Brasília.
+  // Renova o token do Bling e mantém o banco do Aiven ativo.
+  "triggers": { "crons": ["0 9,21 * * *"] },
   // Mantém as variáveis criadas no painel do Cloudflare a cada publicação pelo GitHub.
   // As credenciais do Bling (BLING_CLIENT_ID e BLING_CLIENT_SECRET) devem ser do tipo Secret.
   "keep_vars": true

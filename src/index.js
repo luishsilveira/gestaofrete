@@ -191,7 +191,25 @@ async function obterCotacao(id, env, ctx) {
   return json(r.rows[0]);
 }
 
+// Tarefa agendada (wrangler.jsonc → triggers.crons): renova o token do Bling e mantém o banco ativo.
+async function tarefaAgendada(env, ctx) {
+  await comBanco(env, ctx, async (db) => {
+    await db.query('SELECT 1');
+    if (!blingConfigurado(env)) return;
+    try {
+      await tokenValido(env, db, fetch, true);
+      console.log('Bling: token renovado pela tarefa agendada');
+    } catch (e) {
+      console.error('Bling: falha na renovação agendada –', e.message);
+    }
+  });
+}
+
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(tarefaAgendada(env, ctx));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);

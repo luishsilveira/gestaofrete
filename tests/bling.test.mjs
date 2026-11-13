@@ -25,6 +25,10 @@ let corpoRefresh;
 const tk2=await tokenValido(env,db,async(u,o)=>{ corpoRefresh=o.body; return {ok:true,status:200,json:async()=>({access_token:'NOVO',refresh_token:'R2',expires_in:21600})}; });
 t('renovou token', tk2==='NOVO' && /refresh_token=R0/.test(corpoRefresh) && db.row.refresh_token==='R2');
 t('transação BEGIN/COMMIT', db.q.includes('BEGIN') && db.q.includes('COMMIT'));
+db=fakeDb({access_token:'VIVO',refresh_token:'R5',expira_em:new Date(Date.now()+5*3600e3)});
+let chamouRefresh=false;
+const tk3=await tokenValido(env,db,async(u,o)=>{ chamouRefresh=/refresh_token=R5/.test(o.body); return {ok:true,status:200,json:async()=>({access_token:'FORCADO',refresh_token:'R6',expires_in:21600})}; },true);
+t('renovação forçada (tarefa agendada)', tk3==='FORCADO' && chamouRefresh && db.row.refresh_token==='R6');
 db=fakeDb(null);
 try{ await tokenValido(env,db,fTok); t('sem conexão',false);}catch(e){ t('sem conexão → '+e.codigo, e.codigo==='desconectado' && e.status===409); }
 // 3) buscarPedido

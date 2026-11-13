@@ -57,7 +57,7 @@ public/_headers                           cache (dados sempre atualizados)
    - Secrets `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` no Cloudflare (Workers & Pages → gestaofrete → Settings → Variables and secrets).
    - Link de redirecionamento do aplicativo no Bling: `https://<domínio>/api/bling/callback`.
    - Escopos: Pedidos de Venda e Contatos.
-4. **Tokens:** ficam na tabela `bling_tokens` (access token de cerca de 6 h, renovado sozinho; refresh token de 30 dias, trocado a cada renovação). Se a conexão expirar, aparece o botão "Conectar ao Bling".
+4. **Tokens:** ficam na tabela `bling_tokens` (access token de cerca de 6 h; refresh token de 30 dias, trocado a cada renovação). Uma **tarefa agendada** (`triggers.crons` no `wrangler.jsonc`, às 06h e às 18h de Brasília) renova o token mesmo sem uso e mantém o banco do Aiven ativo. A conexão manual ("Conectar ao Bling") só volta a ser necessária se o aplicativo for revogado no Bling ou se o Client Secret for trocado. Os logs da tarefa ficam em Workers & Pages → gestaofrete → Observability.
 5. **API:**
    - `GET /api/bling/status`
    - `GET /api/bling/conectar`

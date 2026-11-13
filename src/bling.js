@@ -74,16 +74,18 @@ export async function salvarTokens(db, t, usuario) {
 
 // Devolve um access token válido, renovando com trava no banco para evitar duas renovações ao mesmo tempo
 // (o Bling invalida o refresh token antigo a cada uso).
-export async function tokenValido(env, db, fetchImpl = fetch) {
+// forcar = true renova mesmo com o token ainda válido (usado pela tarefa agendada, para o refresh token nunca vencer).
+export async function tokenValido(env, db, fetchImpl = fetch, forcar = false) {
+  const folga = forcar ? Infinity : 120_000;
   const r = await db.query(`SELECT access_token, expira_em FROM bling_tokens WHERE id = 1`);
   if (!r.rows.length) throw new BlingErro('O Bling ainda não foi conectado.', 409, 'desconectado');
-  if (new Date(r.rows[0].expira_em).getTime() - Date.now() > 120_000) return r.rows[0].access_token;
+  if (new Date(r.rows[0].expira_em).getTime() - Date.now() > folga) return r.rows[0].access_token;
 
   await db.query('BEGIN');
   try {
     const l = await db.query(`SELECT access_token, refresh_token, expira_em FROM bling_tokens WHERE id = 1 FOR UPDATE`);
     const atual = l.rows[0];
-    if (new Date(atual.expira_em).getTime() - Date.now() > 120_000) { await db.query('COMMIT'); return atual.access_token; }
+    if (new Date(atual.expira_em).getTime() - Date.now() > folga) { await db.query('COMMIT'); return atual.access_token; }
     let novo;
     try {
       novo = await pedirToken(env, { grant_type: 'refresh_token', refresh_token: atual.refresh_token }, fetchImpl);
