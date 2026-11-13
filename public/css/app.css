@@ -70,3 +70,12 @@ pre{background:#1d2421;color:#e9efe9;padding:14px;border-radius:8px;overflow:aut
 #h_tab tr.lin:hover td{background:#faf9f6}
 #h_det .card{margin-top:14px;background:#faf9f6}
 .ok{color:var(--acc)} .err{color:#b3261e}
+
+#bling hr{border:0;border-top:1px solid var(--line);margin:16px 0 14px}
+.bling-busca{display:flex;gap:8px}
+.bling-busca input{flex:1}
+#b_status{margin-top:8px;line-height:1.5}
+#b_conectar{display:inline-block;margin-top:8px;text-decoration:none}
+#b_conectar.hide{display:none}
+.btn2{background:#fff;color:var(--acc);border:1px solid var(--acc)}
+.aviso{color:var(--warn)}

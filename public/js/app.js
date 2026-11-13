@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; const VERSAO='1.2';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; const VERSAO='1.3';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -206,6 +206,9 @@ function calc(){
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
   $('salvar').classList.toggle('hide',!res.length||!API_OK);
+  { const sel=$('s_transp'), ant=sel.value;
+    sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
+    const k=res.findIndex(x=>x.t.transportadora===(sel.dataset.escolhida||'')); sel.value=String(k>=0?k:0); }
   if(res.length) $('s_status').textContent='';
   const simples=$('simples').checked;
   $('out').classList.toggle('simple',simples); $('avisos').classList.toggle('hide',simples);
@@ -290,7 +293,7 @@ const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
-api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); })
+api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); iniciarBling(); })
   .catch(()=>{ API_OK=false; });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
@@ -302,11 +305,62 @@ $('s_btn').onclick=async()=>{
       prazo:String(x.rv.prazo||x.r.prazo||''),peso_taxado:x.pT,subtotal:+x.sub.toFixed(2),icms:+x.icms.toFixed(2),
       itens:x.it.map(i=>({n:i.n,v:+i.v.toFixed(2),d:i.d}))})),
     sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
+  const esc_=ULT.res[+$('s_transp').value||0];
+  corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
+  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo.bling_pedido_id=BLING_PED.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
     $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva.`;
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
 };
+$('s_transp').onchange=()=>{ const o=$('s_transp').selectedOptions[0]; $('s_transp').dataset.escolhida=o?o.dataset.n:''; };
+$('s_copiar').onclick=async()=>{
+  if(!ULT||!ULT.res.length) return;
+  const x=ULT.res[+$('s_transp').value||0], v=x.total.toFixed(2).replace('.',',');
+  try{ await navigator.clipboard.writeText(v); $('s_status').className='small ok';
+    $('s_status').textContent=`Valor ${v} (${x.t.transportadora}) copiado. Cole no campo Frete do pedido no Bling.`; }
+  catch(e){ $('s_status').className='small'; $('s_status').textContent=`Valor do frete: ${v} (${x.t.transportadora}). Selecione e copie.`; }
+};
+
+// ---------- Bling: buscar pedido ----------
+async function iniciarBling(){
+  const q=new URLSearchParams(location.search);
+  let msg='';
+  if(q.get('bling')==='ok') msg='<span class="ok">Bling conectado com sucesso.</span>';
+  if(q.get('bling')==='erro') msg='<span class="err">Não foi possível conectar ao Bling: '+esc(q.get('msg')||'erro desconhecido')+'</span>';
+  if(q.get('bling')) history.replaceState(null,'',location.pathname);
+  try{ const s=await api('/api/bling/status');
+    if(!s.configurado) return;
+    $('bling').classList.remove('hide');
+    $('b_conectar').classList.toggle('hide',s.conectado);
+    $('b_status').innerHTML=msg||(s.conectado?'':'Para buscar pedidos, conecte a calculadora ao Bling (só é preciso uma vez).');
+  }catch(e){ /* sem API */ }
+}
+async function buscarPedidoBling(){
+  const n=$('b_num').value.replace(/\D/g,''); if(!n) return;
+  $('b_buscar').disabled=true; $('b_status').innerHTML='Buscando pedido no Bling…';
+  try{ const p=await api('/api/bling/pedido?numero='+n);
+    BLING_PED={id:p.id,numero:p.numero}; $('s_transp').dataset.escolhida='';
+    const avisos=[];
+    if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('o pedido não tem peso bruto no Bling: informe o peso');
+    const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
+    if(p.volumes>0) $('qv').value=p.volumes;
+    $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero;
+    $('b_status').innerHTML=`<b>Pedido ${esc(p.numero)}</b>${p.cliente?' · '+esc(p.cliente):''}<br>`+
+      `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
+      `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
+      (p.cep?`<br>CEP ${fmtCep(+p.cep)} (${esc(p.origemCep)})`:'')+
+      (avisos.length?`<br><span class="aviso">Atenção: ${avisos.join('; ')}.</span>`:'');
+    if(p.cep){ $('cep').value=fmtCep(+p.cep); $('cep').dispatchEvent(new Event('input')); }
+    else { $('b_status').innerHTML+='<br><span class="aviso">O pedido não tem CEP de entrega: informe o CEP.</span>'; calc(); }
+  }catch(e){
+    $('b_status').innerHTML='<span class="err">'+esc(e.message)+'</span>';
+    if(/conect/i.test(e.message)) $('b_conectar').classList.remove('hide');
+  }finally{ $('b_buscar').disabled=false; }
+}
+$('b_buscar').onclick=buscarPedidoBling;
+$('b_num').addEventListener('keydown',e=>{ if(e.key==='Enter') buscarPedidoBling(); });
+
 let hTimer=null;
 $('h_busca').addEventListener('input',()=>{ clearTimeout(hTimer); hTimer=setTimeout(carregarHistorico,400); });
 $('h_atualizar').onclick=carregarHistorico;
@@ -320,7 +374,7 @@ async function carregarHistorico(){
     $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th></tr>'+
       L.map(c=>`<tr class="lin" data-id="${c.id}"><td>${c.id}</td><td>${new Date(c.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</td><td class="small">${esc(c.usuario)}</td>
         <td>${esc(c.cliente||'')}${c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
-        <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}</td>
+        <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}${c.transportadora_escolhida&&c.transportadora_escolhida!==c.melhor_transportadora?`<br><span class="small">escolhida: ${esc(c.transportadora_escolhida)} (${brl(+c.valor_escolhido)})</span>`:''}</td>
         <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td></tr>`).join(''):'';
     $('h_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>detalheHistorico(tr.dataset.id));
   }catch(e){ $('h_status').textContent='Erro ao carregar o histórico: '+e.message; }
@@ -334,6 +388,8 @@ async function detalheHistorico(id){
       <div>Destino</div><div>${esc(c.cidade)}/${esc(c.uf)} ${esc(c.cep||'')}</div>
       <div>Carga</div><div>${(+c.peso_real).toLocaleString('pt-BR')} kg real · ${(+c.peso_taxado).toLocaleString('pt-BR')} kg taxado · NF ${brl(+c.valor_nf)}${c.volumes?' · '+c.volumes+' volume(s)':''}</div>
       <div>Regras</div><div>${c.com_icms?'com ICMS':'sem ICMS'} · tonelada: ${c.regra_tonelada==='tot'?'peso total':'excedente'}</div>
+      ${c.transportadora_escolhida?`<div>Escolhida</div><div>${esc(c.transportadora_escolhida)} – ${brl(+c.valor_escolhido)}</div>`:''}
+      ${c.bling_pedido_id?`<div>Pedido no Bling</div><div>ID ${esc(c.bling_pedido_id)}</div>`:''}
       ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
       <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
       ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>

@@ -9,7 +9,8 @@ Site estático: não tem servidor nem banco de dados. Todo o cálculo roda no na
 ```
 wrangler.jsonc                            configuração do Cloudflare Workers (site + API + banco)
 package.json                              dependências do servidor (driver PostgreSQL "pg")
-src/index.js                              servidor: API do histórico de cotações (/api/*)
+src/index.js                              servidor: API do histórico de cotações e do Bling (/api/*)
+src/bling.js                              integração com o Bling (OAuth, tokens, busca de pedido)
 public/index.html                         página
 public/css/app.css                        estilos
 public/js/app.js                          motor de cálculo e telas
@@ -47,6 +48,21 @@ public/_headers                           cache (dados sempre atualizados)
   - `POST /api/cotacoes`: salva uma cotação
   - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
   - `GET /api/cotacoes/{id}`: detalhe completo
+
+## Integração com o Bling (etapa 1: busca do pedido)
+
+1. **Busca:** o usuário digita o nº do pedido. O servidor busca no Bling (API v3) o CEP de entrega (etiqueta de transporte; se faltar, o endereço do cliente), o peso bruto, a quantidade de volumes, o valor dos produtos e o nome do cliente, e preenche a calculadora.
+2. **Volta para o Bling:** por enquanto é manual. O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
+3. **Configuração:**
+   - Secrets `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` no Cloudflare (Workers & Pages → gestaofrete → Settings → Variables and secrets).
+   - Link de redirecionamento do aplicativo no Bling: `https://<domínio>/api/bling/callback`.
+   - Escopos: Pedidos de Venda e Contatos.
+4. **Tokens:** ficam na tabela `bling_tokens` (access token de cerca de 6 h, renovado sozinho; refresh token de 30 dias, trocado a cada renovação). Se a conexão expirar, aparece o botão "Conectar ao Bling".
+5. **API:**
+   - `GET /api/bling/status`
+   - `GET /api/bling/conectar`
+   - `GET /api/bling/callback`
+   - `GET /api/bling/pedido?numero=`
 
 ## Como atualizar uma tabela
 
