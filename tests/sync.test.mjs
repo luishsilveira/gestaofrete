@@ -165,7 +165,12 @@ r = await api('/api/bling/pedido?numero=159461');
 t('busca por nº acha proposta', r.status === 200 && r.j.tipo === 'proposta' && r.j.cep === '29100000' && +r.j.pesoItens === 294);
 t('proposta gravada pela busca', q(`SELECT count(*) FROM propostas_bling;`) === '1');
 r = await api('/api/bling/pedido?numero=424242');
-t('nº inexistente: mensagem de pedido e proposta', r.status === 404 && /nem como pedido de venda nem como proposta/.test(r.j.erro));
+t('nº inexistente: mensagem', r.status === 404 && /pedido de venda, proposta comercial ou nota fiscal/.test(r.j.erro));
+psql(`DELETE FROM nota_itens; DELETE FROM notas_bling;`);
+r = await api('/api/bling/pedido?numero=12345');
+t('busca por nº acha NF de saída', r.status === 200 && r.j.tipo === 'nota' && +r.j.pesoBruto === 52.5 && +r.j.valorProdutos === 1000 && r.j.transportadora === 'Trânsito Brasil');
+r = await api('/api/cotacoes', 'POST', { resultados: [{ transportadora: 'Bento', total: 1 }], bling_nota_id: 9001 });
+t('cotação ligada à NF', r.status === 201 && q(`SELECT bling_nota_id FROM cotacoes WHERE id=${r.j.id};`) === '9001');
 
 // ---------- valores manuais e divergências
 r = await api('/api/cotacoes', 'POST', { uf: 'AL', cidade: 'Pão de Açúcar', peso_real: 120, valor_nf: 2000,

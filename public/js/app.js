@@ -350,7 +350,7 @@ $('s_btn').onclick=async()=>{
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
   corpo.valores_manuais=MAN_PEND;
-  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[BLING_PED.tipo==='proposta'?'bling_proposta_id':'bling_pedido_id']=BLING_PED.id;
+  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[{proposta:'bling_proposta_id',nota:'bling_nota_id'}[BLING_PED.tipo]||'bling_pedido_id']=BLING_PED.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
     $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`; MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
@@ -457,7 +457,7 @@ function preencherPedido(p){
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;
     $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero; $('bp_dest').value=p.documento||'';
-    $('b_status').innerHTML=`<b>${p.tipo==='proposta'?'Proposta':'Pedido'} ${esc(p.numero)}</b>${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
+    $('b_status').innerHTML=`<b>${{proposta:'Proposta',nota:'Nota fiscal'}[p.tipo]||'Pedido'} ${esc(p.numero)}</b>${p.tipo==='nota'&&p.transportadora?' · transportadora da NF: '+esc(p.transportadora):''}${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
       `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
       `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
       (p.cep?`<br>CEP ${fmtCep(+p.cep)} (${esc(p.origemCep)})`:'')+

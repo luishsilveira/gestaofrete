@@ -352,31 +352,38 @@ export async function buscarPedido(token, numero, fetchImpl = fetch) {
   return { ...normalizarPedido(p), _bruto: p };
 }
 
-// Busca uma proposta comercial pelo número: primeiro no banco (já importada), depois no Bling
+// Busca um documento pelo número: primeiro no banco (já importado), depois no Bling
 // (filtro por número, se o Bling aceitar, e senão as páginas mais recentes da lista).
-export async function buscarProposta(db, token, numero, fetchImpl = fetch) {
-  const n = soDigitos(numero);
+async function buscarDocNumero(db, token, numero, fetchImpl, cfg) {
+  const n = soDigitos(numero).replace(/^0+(?=\d)/, '');
   const get = (c) => blingGet(token, c, fetchImpl);
-  let id = ((await db.query('SELECT id FROM propostas_bling WHERE numero = $1 LIMIT 1', [n])).rows[0] || {}).id;
+  const igual = (x) => soDigitos(x).replace(/^0+(?=\d)/, '') === n;
+  let id = ((await db.query(`SELECT id FROM ${cfg.tabela} WHERE ltrim(numero, '0') = $1 ORDER BY id DESC LIMIT 1`, [n])).rows[0] || {}).id;
   if (!id) {
-    const tentativas = [`/propostas-comerciais?numero=${n}&limite=100`];
-    for (let pg = 1; pg <= 5; pg++) tentativas.push(`/propostas-comerciais?pagina=${pg}&limite=100`);
+    const tentativas = [`${cfg.lista}?${cfg.extra}numero=${n}&limite=100`];
+    for (let pg = 1; pg <= 5; pg++) tentativas.push(`${cfg.lista}?${cfg.extra}pagina=${pg}&limite=100`);
     for (const url of tentativas) {
       let lista;
       try { lista = await get(url); } catch (e) { if (e.codigo === 'parametro') continue; throw e; }
       const dados = (lista && lista.data) || [];
-      const achada = dados.find((p) => String(p.numero) === n);
-      if (achada) { id = achada.id; break; }
+      const achado = dados.find((p) => igual(p.numero) && (!cfg.filtrar || cfg.filtrar(p)));
+      if (achado) { id = achado.id; break; }
       if (url.includes('pagina=') && dados.length < 100) break; // acabou a lista
     }
   }
   if (!id) return null;
-  const det = await get(`/propostas-comerciais/${id}`);
+  const det = await get(cfg.detalhe(id));
   const p = det && det.data;
   if (!p) return null;
-  await completarContato(p, get, true);
-  return { ...normalizarProposta(p), _bruto: p };
+  if (cfg.contato) await completarContato(p, get, true);
+  return { ...cfg.normalizar(p), _bruto: p };
 }
+export const buscarProposta = (db, token, numero, fetchImpl = fetch) => buscarDocNumero(db, token, numero, fetchImpl,
+  { tabela: 'propostas_bling', lista: '/propostas-comerciais', extra: '', detalhe: (id) => `/propostas-comerciais/${id}`, contato: true, normalizar: normalizarProposta });
+// Só notas de saída (venda).
+export const buscarNota = (db, token, numero, fetchImpl = fetch) => buscarDocNumero(db, token, numero, fetchImpl,
+  { tabela: 'notas_bling', lista: '/nfe', extra: 'tipo=1&', detalhe: (id) => `/nfe/${id}`, contato: false, normalizar: normalizarNota,
+    filtrar: (p) => p.tipo == null || +p.tipo === 1 });
 
 // Importa na hora os produtos (e componentes de kits) que faltam para calcular o peso de um documento.
 export async function completarProdutos(db, token, ids, fetchImpl = fetch, max = 15) {

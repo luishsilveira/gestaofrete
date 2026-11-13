@@ -7,7 +7,7 @@
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
 import { SCHEMA_BRASPRESS, BraspressErro, contasBraspress, infoContas, cotarBraspress } from './braspress.js';
-import { SCHEMA_DOCS, buscarPedido, buscarProposta, completarProdutos, gravarPedidos, gravarPropostas, sincronizarTudo } from './sync.js';
+import { SCHEMA_DOCS, buscarPedido, buscarProposta, buscarNota, completarProdutos, gravarPedidos, gravarPropostas, gravarNotas, sincronizarTudo } from './sync.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS cotacoes (
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS cotacao_valores_manuais (
   criado_em        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS cvm_cotacao_idx ON cotacao_valores_manuais (cotacao_id);
+ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS bling_nota_id BIGINT;
 `;
 export const MOTIVOS = ['Não identificado', 'Tabela desatualizada / reajuste', 'Taxa não prevista (TDE, TDA, agendamento…)',
   'Praça ou cidade diferente', 'ICMS', 'Peso ou cubagem diferente', 'Valor da NF diferente', 'Desconto ou negociação', 'Outro'];
@@ -106,8 +107,8 @@ async function salvarCotacao(request, env, ctx, usuario) {
       `INSERT INTO cotacoes (usuario, cliente, pedido, observacao, cep, cidade, uf,
          peso_real, peso_taxado, valor_nf, volumes, m3, com_icms, regra_tonelada,
          melhor_transportadora, melhor_valor, melhor_prazo, resultados, sem_cotacao, versao_app,
-         bling_pedido_id, transportadora_escolhida, valor_escolhido, bling_proposta_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+         bling_pedido_id, transportadora_escolhida, valor_escolhido, bling_proposta_id, bling_nota_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        RETURNING id, criado_em`,
       [
         usuario,
@@ -134,6 +135,7 @@ async function salvarCotacao(request, env, ctx, usuario) {
         texto(c.transportadora_escolhida, 80),
         numero(c.valor_escolhido),
         numero(c.bling_proposta_id),
+        numero(c.bling_nota_id),
       ],
     );
     for (const m of manuais) await inserirManual(db, r.rows[0].id, m, c.resultados, usuario);
@@ -297,13 +299,19 @@ async function blingPedido(url, env, ctx, usuario) {
     } catch (e) {
       if (e.codigo !== 'nao_encontrado') throw e;
       p = await buscarProposta(db, token, numero);
-      if (!p) throw new BlingErro(`Nº ${String(numero).replace(/\D/g, '')} não encontrado no Bling, nem como pedido de venda nem como proposta comercial.`, 404, 'nao_encontrado');
       tipo = 'proposta';
+      if (!p) { p = await buscarNota(db, token, numero); tipo = 'nota'; }
+      if (!p) throw new BlingErro(`Nº ${String(numero).replace(/\D/g, '')} não encontrado no Bling como pedido de venda, proposta comercial ou nota fiscal de saída.`, 404, 'nao_encontrado');
     }
     const { _bruto, ...n } = p;
     if (tipo === 'pedido') await gravarPedidos(db, [{ n, bruto: _bruto }], usuario);
-    else await gravarPropostas(db, [{ n, bruto: _bruto }], usuario);
-    const tabela = tipo === 'pedido' ? 'pedido_itens' : 'proposta_itens';
+    else if (tipo === 'proposta') await gravarPropostas(db, [{ n, bruto: _bruto }], usuario);
+    else {
+      await gravarNotas(db, [{ n, bruto: _bruto }], usuario);
+      // nas notas, o peso e o valor vêm com outros nomes
+      Object.assign(n, { valorProdutos: n.valorNota, freteAtual: n.valorFrete });
+    }
+    const tabela = { pedido: 'pedido_itens', proposta: 'proposta_itens', nota: 'nota_itens' }[tipo];
     // produtos dos itens que ainda não foram importados (para o peso pelos itens)
     try { await completarProdutos(db, token, (n.itens || []).map((i) => i.produto_id)); } catch { /* peso pelos itens é opcional */ }
     const w = (await db.query(PESO_DOC(tabela, '$1'), [n.id])).rows[0] || {};
