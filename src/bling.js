@@ -124,8 +124,13 @@ export async function buscarPedido(token, numero, fetchImpl = fetch) {
   const n = soDigitos(numero);
   if (!n) throw new BlingErro('Informe o número do pedido.', 400, 'entrada');
   const lista = await blingGet(token, `/pedidos/vendas?numero=${encodeURIComponent(n)}&limite=100`, fetchImpl);
-  const achado = ((lista && lista.data) || []).find((p) => String(p.numero) === n);
-  if (!achado) throw new BlingErro(`Pedido ${n} não encontrado no Bling.`, 404, 'nao_encontrado');
+  const dados = (lista && lista.data) || [];
+  const achado = dados.find((p) => String(p.numero) === n);
+  if (!achado) {
+    const nums = dados.map((p) => +p.numero).filter((x) => !isNaN(x));
+    const faixa = nums.length ? ` A busca devolveu ${nums.length} pedido(s), do nº ${Math.min(...nums)} ao ${Math.max(...nums)}.` : ' A busca não devolveu nenhum pedido.';
+    throw new BlingErro(`Pedido ${n} não encontrado no Bling.${faixa}`, 404, 'nao_encontrado');
+  }
 
   const det = await blingGet(token, `/pedidos/vendas/${achado.id}`, fetchImpl);
   const p = (det && det.data) || {};
