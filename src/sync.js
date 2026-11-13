@@ -122,7 +122,7 @@ export function normalizarPedido(p) {
     numero: String(p.numero ?? ''),
     data: p.data || null,
     situacaoId: num(sit.id),
-    cliente: (p.contato && p.contato.nome) || '',
+    cliente: (p.contato && p.contato.nome) || (p._contato && p._contato.nome) || '',
     documento: (p.contato && p.contato.numeroDocumento) || (p._contato && p._contato.numeroDocumento) || null,
     ...end,
     pesoBruto: num(tr.pesoBruto),
@@ -152,7 +152,7 @@ export function normalizarProposta(p) {
     data: p.data || null,
     situacao: sitTexto(p.situacao),
     contatoId: num(p.contato && p.contato.id),
-    cliente: (p.contato && p.contato.nome) || '',
+    cliente: (p.contato && p.contato.nome) || (p._contato && p._contato.nome) || '',
     documento: (p.contato && p.contato.numeroDocumento) || (p._contato && p._contato.numeroDocumento) || null,
     ...end,
     valorProdutos: num(p.totalProdutos),
@@ -323,7 +323,7 @@ async function completarContato(bruto, get, precisa) {
   if (!precisa || !bruto.contato || !bruto.contato.id) return false;
   try {
     const c = await get(`/contatos/${bruto.contato.id}`);
-    if (c && c.data) bruto._contato = { endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
+    if (c && c.data) bruto._contato = { nome: c.data.nome || c.data.fantasia || null, endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
     return false;
   } catch (e) {
     if (e.codigo !== 'permissao') throw e;

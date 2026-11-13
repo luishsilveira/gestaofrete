@@ -205,7 +205,7 @@ function calc(){
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
   const bpReq=BP.contas?reqBraspress(peso,nf,m3):null, bpChave=bpReq?JSON.stringify(bpReq):null;
   if(bpReq&&BP.res&&BP.res.chave===bpChave&&BP.res.ok){ const x=BP.res, tb=res.find(r=>r.t.id==='bp');
-    res.push({t:{id:'bp-api',transportadora:'Braspress (cotação online)'},r:{regiao:'cotação online',prazo:x.prazo},
+    res.push({t:{id:'bp-api',transportadora:'Braspress (cotação online)',sub:'online'},r:{regiao:'cotação online',prazo:x.prazo},
       rv:{prazo:x.prazo,txt:'API Braspress',fonte:'api'},pT:pt,total:x.totalFrete,sub:x.totalFrete,icms:0,al:0,api:true,
       it:[{n:'Frete total informado pela Braspress',d:`cotação nº ${x.id||'—'} · válida até 23:59 de hoje${x.remetente?' · remetente '+x.remetente:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:x.totalFrete}].concat(
         tb?[{n:'Diferença para a tabela Braspress (só informativo)',d:`pela tabela: ${brl(tb.total)}`,v:x.totalFrete-tb.total}]:[])}); }
@@ -223,7 +223,7 @@ function calc(){
   if(simples){
     let h=res.map((x,k)=>{ const prazo=x.rv.prazo||x.r.prazo;
       return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='man'?`<span>praça ${x.r.regiao} a confirmar</span>`:''}</div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">valor oficial da Braspress (API)</span>${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:x.t.id==='bp'?`<span>pela tabela${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`:x.rv.fonte==='man'?`<span>praça ${x.r.regiao} a confirmar</span>`:''}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
