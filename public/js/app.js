@@ -204,11 +204,20 @@ function calc(){
     if(t.id==='tjb') op.int=/interior/i.test(r.regiao);
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
   const bpReq=BP.contas?reqBraspress(peso,nf,m3):null, bpChave=bpReq?JSON.stringify(bpReq):null;
-  if(bpReq&&BP.res&&BP.res.chave===bpChave&&BP.res.ok){ const x=BP.res, tb=res.find(r=>r.t.id==='bp');
-    res.push({t:{id:'bp-api',transportadora:'Braspress (cotação online)',sub:'online'},r:{regiao:'cotação online',prazo:x.prazo},
-      rv:{prazo:x.prazo,txt:'API Braspress',fonte:'api'},pT:pt,total:x.totalFrete,sub:x.totalFrete,icms:0,al:0,api:true,
-      it:[{n:'Frete total informado pela Braspress',d:`cotação nº ${x.id||'—'} · válida até 23:59 de hoje${x.remetente?' · remetente '+x.remetente:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:x.totalFrete}].concat(
-        tb?[{n:'Diferença para a tabela Braspress (só informativo)',d:`pela tabela: ${brl(tb.total)}`,v:x.totalFrete-tb.total}]:[])}); }
+  // Braspress: vale a cotação online; a tabela só entra quando a API não responde (as duas ficam registradas).
+  if(bpReq){ const ib=res.findIndex(r=>r.t.id==='bp'), tb=ib>=0?res[ib]:null, x=BP.res&&BP.res.chave===bpChave?BP.res:null;
+    if(x&&x.ok){
+      const on={t:tb?tb.t:TABELAS.find(t=>t.id==='bp')||{id:'bp',transportadora:'Braspress'},r:{regiao:'cotação online',prazo:x.prazo},
+        rv:{prazo:x.prazo,txt:'API Braspress',fonte:'api'},pT:pt,total:x.totalFrete,sub:x.totalFrete,icms:0,al:0,api:true,
+        bp:{fonte:'online',online:x.totalFrete,tabela:tb?+tb.total.toFixed(2):null,praca_tabela:tb?tb.r.regiao:null,id:x.id||null,prazo:x.prazo,erro:null},
+        it:[{n:'Frete total informado pela Braspress',d:`cotação nº ${x.id||'—'} · válida até 23:59 de hoje${x.remetente?' · remetente '+x.remetente:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:x.totalFrete}].concat(
+          tb?[{n:'Diferença para a tabela Braspress (só informativo)',d:`pela tabela: ${brl(tb.total)} (praça ${tb.r.regiao})`,v:x.totalFrete-tb.total}]:[])};
+      if(ib>=0) res.splice(ib,1,on); else { res.push(on); const k=nao.findIndex(n=>n.t.id==='bp'); if(k>=0) nao.splice(k,1); }
+    } else if(tb){
+      const erro=x&&!x.ok?x.erro:(BP.pend===bpChave?'consulta online em andamento':'sem resposta da API');
+      tb.bp={fonte:'tabela',online:null,tabela:+tb.total.toFixed(2),praca_tabela:tb.r.regiao,id:null,prazo:null,erro};
+    }
+  }
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
   if(bpReq) agendarBraspress(bpReq,bpChave);
@@ -223,7 +232,7 @@ function calc(){
   if(simples){
     let h=res.map((x,k)=>{ const prazo=x.rv.prazo||x.r.prazo;
       return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">valor oficial da Braspress (API)</span>${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:x.t.id==='bp'?`<span>pela tabela${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`:x.rv.fonte==='man'?`<span>praça ${x.r.regiao} a confirmar</span>`:''}</div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">valor oficial da Braspress (API)</span>${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:x.t.id==='bp'?`<span>pela tabela · ${x.bp&&x.bp.erro==='consulta online em andamento'?'consultando a Braspress…':'cotação online indisponível'}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`:x.rv.fonte==='man'?`<span>praça ${x.r.regiao} a confirmar</span>`:''}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
@@ -234,8 +243,9 @@ function calc(){
     const dif=k?` <small>+${brl(x.total-res[0].total)} (${((x.total/res[0].total-1)*100).toFixed(1)}%)</small>`:'<small>menor preço</small>';
     const prazo=x.rv.prazo||x.r.prazo;
     const bcls={lista:'b-lista',cap:'b-cap',man:'b-man',api:'b-api'}[x.rv.fonte];
+    const bpNota=x.bp&&x.bp.fonte==='tabela'?` · <span class="aviso">cotação online indisponível: ${esc(x.bp.erro)}</span>`:'';
     return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}</span></div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}${bpNota}</span></div>
       <div class="val">${brl(x.total)}${dif}</div></div>
       <div class="det">${x.rv.op&&x.rv.op.length>1?`<label>Praça usada no cálculo</label><select data-t="${x.t.id}">${x.rv.op.map(o=>`<option value="${o.i}" ${o.i==x.rv.i?'selected':''}>${o.r.regiao}</option>`).join('')}</select>`:''}
       ${x.pT!==pt?`<div class="small" style="margin:8px 0">Peso taxado nesta transportadora: <b>${x.pT.toLocaleString('pt-BR')} kg</b> (isenta de cubagem até ${x.t.isentoCubM3.toLocaleString('pt-BR')} m³)</div>`:''}
@@ -283,8 +293,7 @@ function agendarBraspress(req,chave){
 }
 function bpStatus(chave){
   if(!BP.contas||!chave) return '';
-  if(BP.pend===chave) return '<div class="na">Consultando a cotação online da Braspress…</div>';
-  if(BP.res&&BP.res.chave===chave&&!BP.res.ok) return `<div class="na"><b>Braspress online</b> – ${esc(BP.res.erro)}</div>`;
+  if(BP.res&&BP.res.chave===chave&&!BP.res.ok) return `<div class="na"><b>Braspress online</b> – ${esc(BP.res.erro)} Valor da Braspress pela tabela.</div>`;
   return '';
 }
 async function iniciarBraspress(){
@@ -345,7 +354,8 @@ $('s_btn').onclick=async()=>{
     volumes:+$('qv').value||null,m3:ULT.m3,com_icms:ULT.icms,regra_tonelada:tonMode,versao_app:VERSAO,
     resultados:ULT.res.map(x=>({transportadora:x.t.transportadora,praca:x.r.regiao,fonte_praca:x.rv.txt,total:+x.total.toFixed(2),
       prazo:String(x.rv.prazo||x.r.prazo||''),peso_taxado:x.pT,subtotal:+x.sub.toFixed(2),icms:+x.icms.toFixed(2),
-      itens:x.it.map(i=>({n:i.n,v:+i.v.toFixed(2),d:i.d}))})),
+      itens:x.it.map(i=>({n:i.n,v:+i.v.toFixed(2),d:i.d})),
+      ...(x.bp?{fonte_valor:x.bp.fonte,valor_online:x.bp.online,valor_tabela:x.bp.tabela,praca_tabela:x.bp.praca_tabela,cotacao_online:x.bp.id,erro_online:x.bp.erro}:{})})),
     sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
@@ -644,6 +654,12 @@ async function analiseDivergencias(){
         <td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_nf)}</td><td class="n">${brl(+m.valor_calculado)}</td><td class="n">${brl(+m.valor_manual)}</td>
         <td class="n">${difTxt(+m.valor_manual,+m.valor_calculado)}</td><td class="small">${esc(m.motivo||'')}</td><td class="small">${esc([m.referencia,m.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('')}</table></div>`
       :'<p class="small">Ainda não há valores manuais registrados. Registre no painel "Salvar cotação" ou no detalhe de uma cotação do histórico.</p>'}
+      ${d.braspress&&d.braspress.linhas.length?`<h3>Braspress: cotação online × tabela (${d.braspress.linhas.length} cotações salvas; valor online usado em ${d.braspress.fontes.online}, tabela por falha da API em ${d.braspress.fontes.tabela})</h3>
+        <p class="small">Diferença positiva = a Braspress (online) cobra mais do que a nossa tabela calcula.</p>
+        ${res('Por UF',d.braspress.por_uf.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}${res('Por UF e praça da tabela',d.braspress.por_praca.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}
+        <div class="tbl-wrap"><table class="mini"><tr><th>Data</th><th>Cotação</th><th>Destino</th><th>Praça (tabela)</th><th class="n">Peso</th><th class="n">NF</th><th class="n">Tabela</th><th class="n">Online</th><th class="n">Diferença</th><th>Nº Braspress</th></tr>
+        ${d.braspress.linhas.map(m=>`<tr class="lin" data-id="${m.cotacao_id}"><td>${dataBR(m.criado_em)}</td><td>${m.cotacao_id}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="small">${esc(m.praca||'')}</td>
+          <td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_nf)}</td><td class="n">${brl(+m.tabela)}</td><td class="n">${brl(+m.online)}</td><td class="n">${difTxt(+m.online,+m.tabela)}</td><td class="small">${esc(m.cotacao_online||'')}</td></tr>`).join('')}</table></div>`:''}
       ${d.sem_calculo.length?`<h3>Transportadoras que o sistema não cotou (${d.sem_calculo.length})</h3><table class="mini"><tr><th>Data</th><th>Transportadora</th><th>Destino</th><th class="n">Peso</th><th class="n">Informado</th><th>Obs.</th></tr>`+
         d.sem_calculo.map(m=>`<tr><td>${dataBR(m.criado_em)}</td><td>${esc(m.transportadora)}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_manual)}</td><td class="small">${esc(m.observacao||'')}</td></tr>`).join('')+'</table>':''}</div>`;
     $('h_div').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{ $('h_div').innerHTML=''; $('h_det').innerHTML=''; detalheHistorico(tr.dataset.id); });

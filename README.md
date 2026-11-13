@@ -53,7 +53,7 @@ public/_headers                           cache (dados sempre atualizados)
 
 ## Braspress: cotação online (API)
 
-Além da tabela, a calculadora consulta a API da Braspress (`POST https://api.braspress.com/v1/cotacao/calcular/json`, autenticação Basic) e mostra o resultado como "Braspress (cotação online)", com prazo, nº da cotação e a diferença para a tabela.
+A Braspress é sempre cotada online pela API (`POST https://api.braspress.com/v1/cotacao/calcular/json`, autenticação Basic). O valor online substitui o da tabela no ranking; a tabela só é usada quando a API não responde ou dá erro (a linha mostra "cotação online indisponível"). A cotação salva registra os dois valores (`valor_online`, `valor_tabela`, `fonte_valor`, `cotacao_online`, `erro_online` em `resultados`), e a Análise de divergências compara online × tabela por UF e por praça.
 
 - **Credenciais:** secret `BRASPRESS_CONTAS` no Cloudflare (tipo Secret), JSON com uma conta por CNPJ: `[{"cnpj":"…","usuario":"…_PRD","senha":"…"}]`. Campos opcionais: `"cepOrigem"` e `"nome"`. Sem `cepOrigem`, o CEP vem do cadastro do CNPJ (BrasilAPI), guardado em `braspress_contas`.
 - **Remetente:** a calculadora mostra a lista de CNPJs. O padrão é `BRASPRESS_CNPJ_PADRAO` (variável opcional), ou o CNPJ de Nova Santa Rita, ou o primeiro.

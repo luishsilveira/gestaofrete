@@ -193,6 +193,11 @@ const bento = r.j.por_transportadora.find((x) => x.grupo === 'Bento');
 t('divergência Bento +10%', +bento.media_pct === 10 && +bento.media_dif === 30 && r.j.linhas.find((x) => x.transportadora === 'Bento').praca === 'AL interior');
 t('resumos por UF, peso e motivo', r.j.por_uf.some((x) => x.grupo === 'Bento · AL') && r.j.por_peso.some((x) => x.grupo === 'Bento · 101 a 200 kg') && r.j.por_motivo.length === 2);
 t('sem cálculo separado', r.j.sem_calculo.length === 1 && r.j.linhas.length === 2);
+r = await api('/api/cotacoes', 'POST', { uf: 'SP', cidade: 'Cravinhos', peso_real: 43.8, valor_nf: 816,
+  resultados: [{ transportadora: 'Braspress', total: 162.05, fonte_valor: 'online', valor_online: 162.05, valor_tabela: 145.26, praca_tabela: 'Interior de SP 1', cotacao_online: '777' }] });
+await api('/api/cotacoes', 'POST', { uf: 'SP', resultados: [{ transportadora: 'Braspress', total: 150, fonte_valor: 'tabela', valor_tabela: 150, erro_online: 'timeout' }] });
+r = await api('/api/divergencias');
+t('Braspress online × tabela', r.j.braspress.linhas.length === 1 && +r.j.braspress.linhas[0].diferenca === 16.79 && r.j.braspress.por_praca[0].grupo === 'SP · Interior de SP 1' && +r.j.braspress.fontes.online === 1 && +r.j.braspress.fontes.tabela === 1);
 const idm = r.j.sem_calculo[0].id;
 t('remover manual', (await api(`/api/manuais/${idm}`, 'DELETE')).status === 200 && (await api(`/api/cotacoes/${idc}`)).j.valores_manuais.length === 2);
 

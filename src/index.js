@@ -210,9 +210,28 @@ async function divergencias(url, env, ctx) {
     db.query(resumo(`COALESCE(motivo, 'Sem motivo informado')`), params),
     db.query(`SELECT m.*, c.criado_em AS cotado_em, c.cidade, c.uf, c.peso_real, c.valor_nf FROM cotacao_valores_manuais m
                 JOIN cotacoes c ON c.id = m.cotacao_id WHERE m.valor_calculado IS NULL ORDER BY m.criado_em DESC LIMIT 500`),
+    // Braspress: valor online (API) × tabela, gravados juntos em cada cotação salva
+    db.query(`SELECT c.id AS cotacao_id, c.criado_em, c.cidade, c.uf, c.cep, c.peso_real, c.peso_taxado, c.valor_nf,
+                     r->>'praca_tabela' AS praca, (r->>'valor_tabela')::numeric AS tabela, (r->>'valor_online')::numeric AS online,
+                     r->>'cotacao_online' AS cotacao_online, r->>'prazo' AS prazo,
+                     (r->>'valor_online')::numeric - (r->>'valor_tabela')::numeric AS diferenca,
+                     ROUND(((r->>'valor_online')::numeric - (r->>'valor_tabela')::numeric) / NULLIF((r->>'valor_tabela')::numeric, 0) * 100, 2) AS diferenca_pct
+                FROM cotacoes c CROSS JOIN LATERAL jsonb_array_elements(c.resultados) r
+               WHERE r->>'valor_online' IS NOT NULL AND r->>'valor_tabela' IS NOT NULL
+               ORDER BY c.criado_em DESC LIMIT 2000`),
+    db.query(`SELECT COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'online') AS online, COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'tabela') AS tabela
+                FROM cotacoes c CROSS JOIN LATERAL jsonb_array_elements(c.resultados) r WHERE r ? 'fonte_valor'`),
   ]));
+  const bp = r[6].rows;
+  const agrupar = (f) => Object.values(bp.reduce((a, x) => {
+    const k = f(x); const g = a[k] || (a[k] = { grupo: k, n: 0, soma: 0, somaPct: 0, min: Infinity, max: -Infinity });
+    g.n++; g.soma += +x.diferenca; g.somaPct += +x.diferenca_pct; g.min = Math.min(g.min, +x.diferenca_pct); g.max = Math.max(g.max, +x.diferenca_pct); return a;
+  }, {})).map((g) => ({ grupo: g.grupo, n: g.n, media_dif: +(g.soma / g.n).toFixed(2), media_pct: +(g.somaPct / g.n).toFixed(2), min_pct: g.min, max_pct: g.max }))
+    .sort((a, b) => b.n - a.n);
   return json({ linhas: r[0].rows, por_transportadora: r[1].rows, por_uf: r[2].rows, por_peso: r[3].rows, por_motivo: r[4].rows,
-    sem_calculo: r[5].rows, motivos: MOTIVOS });
+    sem_calculo: r[5].rows, motivos: MOTIVOS,
+    braspress: { linhas: bp, por_uf: agrupar((x) => x.uf || '—'), por_praca: agrupar((x) => `${x.uf || '—'} · ${x.praca || '—'}`),
+      fontes: r[7].rows[0] || { online: 0, tabela: 0 } } });
 }
 
 async function listarCotacoes(url, env, ctx) {
