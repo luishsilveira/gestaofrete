@@ -159,6 +159,14 @@ t('cotação salva com proposta', r.status === 201);
 r = await api('/api/bling/propostas');
 t('proposta mostra a cotação', r.j.propostas[0].cotacao_id && +r.j.propostas[0].melhor_valor === 300);
 
+// ---------- busca manual de proposta pelo número (fora do banco: procura na lista do Bling)
+psql(`DELETE FROM proposta_itens; DELETE FROM propostas_bling;`);
+r = await api('/api/bling/pedido?numero=159461');
+t('busca por nº acha proposta', r.status === 200 && r.j.tipo === 'proposta' && r.j.cep === '29100000' && +r.j.pesoItens === 294);
+t('proposta gravada pela busca', q(`SELECT count(*) FROM propostas_bling;`) === '1');
+r = await api('/api/bling/pedido?numero=424242');
+t('nº inexistente: mensagem de pedido e proposta', r.status === 404 && /nem como pedido de venda nem como proposta/.test(r.j.erro));
+
 // ---------- valores manuais e divergências
 r = await api('/api/cotacoes', 'POST', { uf: 'AL', cidade: 'Pão de Açúcar', peso_real: 120, valor_nf: 2000,
   resultados: [{ transportadora: 'Bento', total: 300, praca: 'AL interior' }, { transportadora: 'Braspress', total: 350 }],

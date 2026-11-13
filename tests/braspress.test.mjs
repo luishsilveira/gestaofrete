@@ -3,7 +3,7 @@ import worker from '../src/index.js';
 import { montarRequisicao, DESTINATARIO_GENERICO } from '../src/braspress.js';
 let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
 const env = { HYPERDRIVE: { connectionString: 'x' }, ASSETS: { fetch: async () => new Response('') },
-  BRASPRESS_CONTAS: JSON.stringify([{ cnpj: '12.995.553/0001-00', usuario: 'U1', senha: 'S1' }, { cnpj: '46816509000108', usuario: 'U2', senha: 'S2', cepOrigem: '92480-000' }]) };
+  BRASPRESS_CONTAS: JSON.stringify([{ cnpj: '12.995.553/0001-00', usuario: 'U1', senha: 'S1' }, { cnpj: '46816509000108', usuario: 'U2', senha: 'S2', cepOrigem: '92480-000' }, { cnpj: '66488228000180', usuario: 'U3', senha: 'S3' }]) };
 const api = async (path, method = 'GET', body) => {
   const r = await worker.fetch(new Request('https://x.dev' + path, { method, body: body && JSON.stringify(body), headers: { 'cf-access-authenticated-user-email': 'luis@x' } }), env, { waitUntil() {} });
   return { status: r.status, j: await r.json() };
@@ -23,7 +23,7 @@ const q = montarRequisicao({ cnpj: '12995553000100', cepOrigem: '92480000' }, { 
 t('cubagem pelo m³ e destinatário genérico', q.cubagem.length === 1 && q.cubagem[0].volumes === 2 && Math.abs(q.cubagem[0].altura ** 3 * 2 - 0.054) < 0.001 && q.cnpjDestinatario === +DESTINATARIO_GENERICO && q.tipoFrete === '1' && q.modal === 'R' && q.cepDestino === 57400000);
 
 let r = await api('/api/braspress/status');
-t('status: contas, padrão em Nova Santa Rita, sem senha', r.j.configurado && r.j.contas.length === 2 && r.j.contas[0].padrao && r.j.contas[0].cepOrigem === '92480000' && !('senha' in r.j.contas[0]) && r.j.contas[1].cepOrigem === '92480-000'.replace('-', ''));
+t('status: contas, padrão em Nova Santa Rita, sem senha', r.j.configurado && r.j.contas.length === 3 && r.j.contas[2].cepOrigem === '92480000' && r.j.contas[2].cepOrigemPresumido && chamadas.some((c) => c.url.includes('publica.cnpj.ws/cnpj/66488228000180')) && chamadas.some((c) => c.url.includes('receitaws')) && r.j.contas[0].padrao && r.j.contas[0].cepOrigem === '92480000' && !('senha' in r.j.contas[0]) && r.j.contas[1].cepOrigem === '92480-000'.replace('-', ''));
 const corpo = { cepDestino: '57400000', peso: 19, vlrMercadoria: 697.51, volumes: 1, cubagem: [{ comprimento: 0.16, largura: 0.4, altura: 0.55, volumes: 1 }], cnpjDestinatario: '11.222.333/0001-81' };
 chamadas.length = 0;
 r = await api('/api/braspress/cotar', 'POST', corpo);

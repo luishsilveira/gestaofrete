@@ -290,7 +290,7 @@ function bpStatus(chave){
 async function iniciarBraspress(){
   try{ const s=await api('/api/braspress/status'); if(!s.configurado||!s.contas.length) return;
     BP.contas=s.contas;
-    $('bp_rem').innerHTML=s.contas.map(c=>`<option value="${c.cnpj}" ${c.padrao?'selected':''}>${esc(c.razao_social||'CNPJ')} – ${c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}${c.cidade?' ('+esc(c.cidade)+'/'+esc(c.uf)+')':''}</option>`).join('');
+    $('bp_rem').innerHTML=s.contas.map(c=>`<option value="${c.cnpj}" ${c.padrao?'selected':''}>${esc(c.razao_social||'CNPJ')} – ${c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}${c.cidade?' ('+esc(c.cidade)+'/'+esc(c.uf)+')':''}${c.cepOrigemPresumido?' – origem '+fmtCep(+c.cepOrigem)+' (presumida)':''}</option>`).join('');
     $('bp_cfg').classList.remove('hide'); calc();
   }catch(e){ /* sem API */ }
 }
@@ -435,9 +435,11 @@ async function iniciarBling(){
 }
 async function buscarPedidoBling(){
   const n=$('b_num').value.replace(/\D/g,''); if(!n) return;
-  $('b_buscar').disabled=true; $('b_status').innerHTML='Buscando pedido no Bling…';
+  $('b_buscar').disabled=true; $('b_status').innerHTML='Buscando no Bling…';
   try{ const p=await api('/api/bling/pedido?numero='+n);
+    if(p.tipo==='proposta'&&p.freteAtual==null) p.freteAtual=p.frete;
     if(!(p.pesoBruto>0)&&p.pesoItens>0){ p.pesoBruto=p.pesoItens; p.origemPeso='itens'; }
+    if(p.itensSemPeso>0) p.avisoItens=`${p.itensSemPeso} item(ns) sem peso no cadastro do Bling`;
     preencherPedido(p);
   }catch(e){
     $('b_status').innerHTML='<span class="err">'+esc(e.message)+'</span>';
@@ -450,6 +452,7 @@ function preencherPedido(p){
     const avisos=[];
     if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('sem peso no Bling (nem no documento nem nos produtos): informe o peso');
     if(p.origemPeso==='itens') avisos.push('peso calculado pelos itens (peso dos produtos e componentes dos kits)');
+    if(p.avisoItens) avisos.push(p.avisoItens);
     else if(p.pesoItens>0&&Math.abs(p.pesoItens-p.pesoBruto)>Math.max(1,p.pesoBruto*0.05)) avisos.push(`peso pelos itens é ${p.pesoItens.toLocaleString('pt-BR')} kg, diferente do peso do pedido`);
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;

@@ -352,6 +352,52 @@ export async function buscarPedido(token, numero, fetchImpl = fetch) {
   return { ...normalizarPedido(p), _bruto: p };
 }
 
+// Busca uma proposta comercial pelo número: primeiro no banco (já importada), depois no Bling
+// (filtro por número, se o Bling aceitar, e senão as páginas mais recentes da lista).
+export async function buscarProposta(db, token, numero, fetchImpl = fetch) {
+  const n = soDigitos(numero);
+  const get = (c) => blingGet(token, c, fetchImpl);
+  let id = ((await db.query('SELECT id FROM propostas_bling WHERE numero = $1 LIMIT 1', [n])).rows[0] || {}).id;
+  if (!id) {
+    const tentativas = [`/propostas-comerciais?numero=${n}&limite=100`];
+    for (let pg = 1; pg <= 5; pg++) tentativas.push(`/propostas-comerciais?pagina=${pg}&limite=100`);
+    for (const url of tentativas) {
+      let lista;
+      try { lista = await get(url); } catch (e) { if (e.codigo === 'parametro') continue; throw e; }
+      const dados = (lista && lista.data) || [];
+      const achada = dados.find((p) => String(p.numero) === n);
+      if (achada) { id = achada.id; break; }
+      if (url.includes('pagina=') && dados.length < 100) break; // acabou a lista
+    }
+  }
+  if (!id) return null;
+  const det = await get(`/propostas-comerciais/${id}`);
+  const p = det && det.data;
+  if (!p) return null;
+  await completarContato(p, get, true);
+  return { ...normalizarProposta(p), _bruto: p };
+}
+
+// Importa na hora os produtos (e componentes de kits) que faltam para calcular o peso de um documento.
+export async function completarProdutos(db, token, ids, fetchImpl = fetch, max = 15) {
+  const get = (c) => blingGet(token, c, fetchImpl);
+  let lidos = 0;
+  for (let rodada = 0; rodada < 2 && lidos < max; rodada++) {
+    const alvo = rodada === 0 ? ids.filter(Boolean) : (await db.query(
+      `SELECT DISTINCT e.componente_id AS id FROM produtos_estrutura e WHERE e.produto_id = ANY($1::bigint[])`, [ids])).rows.map((r) => r.id);
+    if (!alvo.length) continue;
+    const ja = new Set((await db.query('SELECT id FROM produtos_bling WHERE id = ANY($1::bigint[])', [alvo])).rows.map((r) => String(r.id)));
+    const gravar = [];
+    for (const id of alvo.filter((x) => !ja.has(String(x)))) {
+      if (lidos >= max) break;
+      const det = await get(`/produtos/${id}`); lidos++;
+      if (det && det.data) gravar.push({ n: normalizarProduto(det.data), bruto: det.data, assinatura: RECURSOS.find((r) => r.nome === 'produtos').assinatura(det.data) });
+    }
+    if (gravar.length) await gravarProdutos(db, gravar, 'busca manual');
+  }
+  return lidos;
+}
+
 // ---------------------------------------------------------------- importação automática
 const dataISO = (d) => d.toISOString().slice(0, 10);
 

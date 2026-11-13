@@ -7,7 +7,7 @@
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
 import { SCHEMA_BRASPRESS, BraspressErro, contasBraspress, infoContas, cotarBraspress } from './braspress.js';
-import { SCHEMA_DOCS, buscarPedido, gravarPedidos, sincronizarTudo } from './sync.js';
+import { SCHEMA_DOCS, buscarPedido, buscarProposta, completarProdutos, gravarPedidos, gravarPropostas, sincronizarTudo } from './sync.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS cotacoes (
@@ -285,18 +285,31 @@ async function blingCallback(url, env, ctx, usuario) {
   }
 }
 
+// Busca pelo número: pedido de venda e, se não houver, proposta comercial.
 async function blingPedido(url, env, ctx, usuario) {
   if (!blingConfigurado(env)) return json({ erro: 'Integração com o Bling não configurada.', codigo: 'nao_configurado' }, 400);
-  const pedido = await comBanco(env, ctx, async (db) => {
+  const numero = url.searchParams.get('numero');
+  const doc = await comBanco(env, ctx, async (db) => {
     const token = await tokenValido(env, db);
-    const p = await buscarPedido(token, url.searchParams.get('numero'));
+    let tipo = 'pedido', p;
+    try {
+      p = await buscarPedido(token, numero);
+    } catch (e) {
+      if (e.codigo !== 'nao_encontrado') throw e;
+      p = await buscarProposta(db, token, numero);
+      if (!p) throw new BlingErro(`Nº ${String(numero).replace(/\D/g, '')} não encontrado no Bling, nem como pedido de venda nem como proposta comercial.`, 404, 'nao_encontrado');
+      tipo = 'proposta';
+    }
     const { _bruto, ...n } = p;
-    await gravarPedidos(db, [{ n, bruto: _bruto }], usuario);
-    // peso pelos itens (produtos já importados; kits pela soma dos componentes)
-    const w = (await db.query(PESO_DOC('pedido_itens', '$1'), [n.id])).rows[0] || {};
-    return { ...n, pesoItens: +w.peso_calculado || null, itensSemPeso: +w.itens_sem_peso || 0 };
+    if (tipo === 'pedido') await gravarPedidos(db, [{ n, bruto: _bruto }], usuario);
+    else await gravarPropostas(db, [{ n, bruto: _bruto }], usuario);
+    const tabela = tipo === 'pedido' ? 'pedido_itens' : 'proposta_itens';
+    // produtos dos itens que ainda não foram importados (para o peso pelos itens)
+    try { await completarProdutos(db, token, (n.itens || []).map((i) => i.produto_id)); } catch { /* peso pelos itens é opcional */ }
+    const w = (await db.query(PESO_DOC(tabela, '$1'), [n.id])).rows[0] || {};
+    return { ...n, tipo, pesoItens: +w.peso_calculado || null, itensSemPeso: +w.itens_sem_peso || 0 };
   });
-  return json(pedido);
+  return json(doc);
 }
 
 async function blingSincronizar(env, ctx) {

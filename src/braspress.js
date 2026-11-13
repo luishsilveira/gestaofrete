@@ -38,6 +38,28 @@ CREATE TABLE IF NOT EXISTS braspress_cotacoes (
 CREATE INDEX IF NOT EXISTS braspress_cotacoes_chave_idx ON braspress_cotacoes (chave, criado_em DESC);
 `;
 
+// Origem da Proloplast (Nova Santa Rita/RS), usada quando o cadastro do CNPJ não pôde ser consultado.
+export const CEP_ORIGEM_PADRAO = '92480000';
+
+// Cadastro do CNPJ (nome, cidade, CEP) em serviços públicos, um após o outro.
+async function consultarCnpj(cnpj, fetchImpl) {
+  const fontes = [
+    [`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, (j) => ({ razao_social: j.razao_social, fantasia: j.nome_fantasia, cidade: j.municipio, uf: j.uf, cep: j.cep })],
+    [`https://publica.cnpj.ws/cnpj/${cnpj}`, (j) => { const e = j.estabelecimento || {};
+      return { razao_social: j.razao_social, fantasia: e.nome_fantasia, cidade: e.cidade && e.cidade.nome, uf: e.estado && e.estado.sigla, cep: e.cep }; }],
+    [`https://receitaws.com.br/v1/cnpj/${cnpj}`, (j) => (j.status === 'ERROR' ? {} : { razao_social: j.nome, fantasia: j.fantasia, cidade: j.municipio, uf: j.uf, cep: j.cep })],
+  ];
+  for (const [url, ler] of fontes) {
+    try {
+      const resp = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': 'gestaofrete-proloplast/1.0' } });
+      if (!resp.ok) continue;
+      const x = ler(await resp.json());
+      if (so(x.cep).length === 8) return { cnpj, razao_social: x.razao_social || null, fantasia: x.fantasia || null, cidade: x.cidade || null, uf: x.uf || null, cep: so(x.cep) };
+    } catch { /* tenta a próxima fonte */ }
+  }
+  return null;
+}
+
 const so = (s) => String(s ?? '').replace(/\D/g, '');
 
 export function contasBraspress(env) {
@@ -57,23 +79,20 @@ export async function infoContas(env, db, fetchImpl = fetch) {
   const cad = Object.fromEntries(r.rows.map((x) => [x.cnpj, x]));
   for (const c of contas) {
     if (cad[c.cnpj] && cad[c.cnpj].cep) continue;
-    try {
-      const resp = await fetchImpl(`https://brasilapi.com.br/api/cnpj/v1/${c.cnpj}`, { headers: { accept: 'application/json' } });
-      if (!resp.ok) continue;
-      const j = await resp.json();
-      const linha = { cnpj: c.cnpj, razao_social: j.razao_social || null, fantasia: j.nome_fantasia || null,
-        cidade: j.municipio || null, uf: j.uf || null, cep: so(j.cep) || null };
+    const linha = await consultarCnpj(c.cnpj, fetchImpl);
+    if (linha) {
       await db.query(
         `INSERT INTO braspress_contas (cnpj, razao_social, fantasia, cidade, uf, cep) VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (cnpj) DO UPDATE SET razao_social=$2, fantasia=$3, cidade=$4, uf=$5, cep=$6, atualizado_em=now()`,
         [linha.cnpj, linha.razao_social, linha.fantasia, linha.cidade, linha.uf, linha.cep]);
       cad[c.cnpj] = linha;
-    } catch { /* sem cadastro: segue sem nome/CEP */ }
+    }
   }
   const lista = contas.map((c) => {
     const k = cad[c.cnpj] || {};
+    const cepPadrao = so(env.BRASPRESS_CEP_ORIGEM) || CEP_ORIGEM_PADRAO;
     return { ...c, razao_social: c.nome || k.fantasia || k.razao_social || null, cidade: k.cidade || null, uf: k.uf || null,
-      cepOrigem: c.cepOrigem || k.cep || null };
+      cepOrigem: c.cepOrigem || k.cep || cepPadrao, cepOrigemPresumido: !c.cepOrigem && !k.cep };
   });
   const padrao = so(env.BRASPRESS_CNPJ_PADRAO)
     || (lista.find((c) => /NOVA SANTA RITA/i.test(c.cidade || '')) || lista[0]).cnpj;
