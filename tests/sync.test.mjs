@@ -3,7 +3,8 @@
 // que use ./pgpsql.mjs (ver README, seção Testes).
 import { psql } from './pgpsql.mjs';
 import worker from '../src/index.js';
-import { BLING, SCHEMA_BLING } from '../src/bling.js';
+import { BLING, SCHEMA_BLING, definirRitmoBling } from '../src/bling.js';
+definirRitmoBling({ intervalo: 0, esperasLimite: [1, 1] });
 import { SCHEMA_DOCS, sincronizarTudo } from '../src/sync.js';
 import { db } from './pgpsql.mjs';
 
@@ -43,10 +44,11 @@ const produtos = {
   503: { id: 503, codigo: 'D16-50', nome: 'Tubo Saco 51X110X160 50 un COM LACRES', formato: 'E', situacao: 'A', preco: 95.88, pesoBruto: 0,
          estrutura: { componentes: [{ produto: { id: 501 }, quantidade: 50 }, { produto: { id: 502 }, quantidade: 50 }] } },
 };
-const urls = []; let recusar = new Set();
+const urls = []; let recusar = new Set(); let limitar = 0;
 globalThis.fetch = async (url) => {
   const u = String(url).replace(BLING.apiBase, ''); urls.push(u);
   const R = (s, j) => new Response(JSON.stringify(j), { status: s, headers: { 'content-type': 'application/json' } });
+  if (limitar > 0 && /\/\d+$/.test(u)) { limitar--; return R(429, {}); }
   for (const r of recusar) if (u.includes(r)) return R(400, { error: { description: 'parâmetro inválido' } });
   const lista = (obj, f = () => true) => R(200, { data: u.includes('pagina=1') || !u.includes('pagina=') ? Object.values(obj).filter(f).map((x) => ({ id: x.id, numero: x.numero, data: x.data, dataEmissao: x.dataEmissao, total: x.total, situacao: x.situacao, tipo: x.tipo, preco: x.preco, formato: x.formato })) : [] });
   if (u.startsWith('/pedidos/vendas?')) return lista(pedidos);
@@ -133,6 +135,21 @@ r = await sincronizarTudo(env, db, fetch, { limiteChamadas: 6 });
 t(`limite 6: ${r.mensagem}`, r.chamadas <= 6 && r.resultados.some((x) => x.pendentes > 0 || x.adiado));
 for (let i = 0; i < 6; i++) await sincronizarTudo(env, db, fetch, { limiteChamadas: 6 });
 t('execuções seguintes completam tudo', q(`SELECT (SELECT count(*) FROM pedidos_bling)||'/'||(SELECT count(*) FROM propostas_bling)||'/'||(SELECT count(*) FROM notas_bling)||'/'||(SELECT count(*) FROM produtos_bling);`) === '2/1/1/4');
+
+// ---------- HTTP 429: tenta de novo e, se persistir, para e deixa para a próxima
+limitar = 2; pedidos[101].total = 1030;
+r = await sincronizarTudo(env, db);
+t('429 passageiro: tenta de novo e grava', q(`SELECT valor_total FROM pedidos_bling WHERE id=101;`) === '1030.00');
+limitar = 1000; pedidos[101].total = 1040; propostas[201].total = 1400;
+r = await sincronizarTudo(env, db);
+t('429 persistente: para os demais recursos', r.resultados.filter((x) => x.adiado).length >= 1 && r.resultados.find((x) => x.codigo === 'limite'));
+limitar = 0;
+r = await sincronizarTudo(env, db);
+t('depois do limite, completa', q(`SELECT valor_total FROM pedidos_bling WHERE id=101;`) === '1040.00');
+
+// ---------- trava: duas sincronizações ao mesmo tempo
+const [a1, a2] = await Promise.all([sincronizarTudo(env, db), sincronizarTudo(env, db)]);
+t('só uma sincronização por vez', [a1, a2].filter((x) => x.emAndamento).length === 1);
 
 // ---------- busca manual e cotação ligada à proposta
 r = await api('/api/bling/pedido?numero=3552');

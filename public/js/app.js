@@ -396,7 +396,7 @@ $('p_busca').addEventListener('input',()=>{ clearTimeout(pTimer); pTimer=setTime
 $('p_filtro').onchange=()=>carregarBling(); $('p_canal').onchange=()=>carregarBling();
 $('p_sync').onclick=async()=>{
   const b=$('p_sync'); b.disabled=true; $('p_status').textContent='Sincronizando com o Bling…';
-  try{ await api('/api/bling/sincronizar',{method:'POST'}); BLING_SYNC=null; await carregarBling(); }
+  try{ const r=await api('/api/bling/sincronizar',{method:'POST'}); BLING_SYNC=null; await carregarBling(); if(r.emAndamento) $('p_status').innerHTML='<span class="aviso">'+esc(r.mensagem)+'</span> '+$('p_status').innerHTML; }
   catch(e){ $('p_status').innerHTML='<span class="err">Erro ao sincronizar: '+esc(e.message)+'</span>'; }
   finally{ b.disabled=false; }
 };

@@ -138,10 +138,27 @@ export async function tokenValido(env, db, fetchImpl = fetch, forcar = false) {
   }
 }
 
+// O Bling aceita 3 requisições por segundo por aplicativo. Espaçamos as chamadas e,
+// se mesmo assim vier HTTP 429, esperamos e tentamos de novo.
+const ritmo = { intervalo: 400, ultima: 0, esperasLimite: [1200, 2500, 5000] };
+export const definirRitmoBling = (o) => Object.assign(ritmo, o);
+const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function aguardarVez() {
+  const agora = Date.now(), vez = Math.max(agora, ritmo.ultima + ritmo.intervalo);
+  ritmo.ultima = vez;
+  if (vez > agora) await dormir(vez - agora);
+}
+
 export async function blingGet(token, caminho, fetchImpl = fetch) {
-  const r = await fetchImpl(BLING.apiBase + caminho, {
-    headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-  });
+  let r;
+  for (let tentativa = 0; ; tentativa++) {
+    await aguardarVez();
+    r = await fetchImpl(BLING.apiBase + caminho, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+    });
+    if (r.status !== 429 || tentativa >= ritmo.esperasLimite.length) break;
+    await dormir(ritmo.esperasLimite[tentativa]);
+  }
   let j = null;
   try { j = await r.json(); } catch { /* sem JSON */ }
   if (r.status === 401) throw new BlingErro('O Bling recusou o acesso. Conecte de novo ao Bling.', 409, 'desconectado');
@@ -150,7 +167,7 @@ export async function blingGet(token, caminho, fetchImpl = fetch) {
     const recurso = caminho.split('?')[0].replace(/\/\d+$/, '').replace(/^\//, '');
     throw new BlingErro(`O aplicativo do Bling não tem permissão para consultar "${recurso}". Inclua esse escopo no aplicativo do Bling e conecte de novo.`, 403, 'permissao');
   }
-  if (r.status === 429) throw new BlingErro('O Bling limitou as consultas por alguns segundos. Tente de novo.', 429, 'limite');
+  if (r.status === 429) throw new BlingErro('O Bling limitou as consultas por alguns segundos; o restante fica para a próxima execução.', 429, 'limite');
   if (!r.ok) {
     const det = j && j.error && (j.error.description || j.error.message);
     const param = r.status === 400 || r.status === 422;

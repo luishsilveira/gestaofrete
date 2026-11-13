@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
 CREATE TABLE IF NOT EXISTS proposta_itens (LIKE pedido_itens INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS nota_itens (LIKE pedido_itens INCLUDING ALL);
 
+CREATE TABLE IF NOT EXISTS bling_sync_trava (id INT PRIMARY KEY, ate TIMESTAMPTZ NOT NULL);
 CREATE TABLE IF NOT EXISTS bling_sync_recurso (
   recurso TEXT PRIMARY KEY, ultima_execucao TIMESTAMPTZ, ultimo_completo TIMESTAMPTZ, mensagem TEXT
 );
@@ -502,18 +503,33 @@ export async function sincronizarTudo(env, db, fetchImpl = fetch, opcoes = {}) {
   s.get = async (caminho) => { s.chamadas++; return blingGet(token, caminho, fetchImpl); };
   const recursos = opcoes.recursos ? RECURSOS.filter((r) => opcoes.recursos.includes(r.nome)) : RECURSOS;
   const resultados = [];
-  for (const R of recursos) {
-    if (s.chamadas >= s.limite) { resultados.push({ recurso: R.nome, adiado: true, mensagem: `${R.rotulo}: aguardando a próxima execução` }); continue; }
+  // Só uma sincronização por vez (a automática e o botão "Sincronizar agora" podem coincidir).
+  const trava = await db.query(
+    `INSERT INTO bling_sync_trava (id, ate) VALUES (1, now() + interval '4 minutes')
+     ON CONFLICT (id) DO UPDATE SET ate = EXCLUDED.ate WHERE bling_sync_trava.ate < now() RETURNING id`);
+  if (!trava.rows.length) return { resultados, chamadas: 0, semContatos: false, emAndamento: true, mensagem: 'Já existe uma sincronização em andamento; aguarde alguns instantes.' };
+  try {
+  const total = s.limite; let parado = null;
+  for (const [i, R] of recursos.entries()) {
+    // Divide as chamadas entre os recursos que faltam; o que um não usar passa para o seguinte.
+    const resta = total - s.chamadas;
+    s.limite = s.chamadas + Math.max(Math.ceil(resta / (recursos.length - i)), Math.min(8, resta)); // mínimo para listar e ler alguns
+    if (parado || s.chamadas >= total) { resultados.push({ recurso: R.nome, adiado: true, mensagem: `${R.rotulo}: aguardando a próxima execução${parado ? ' (limite de consultas do Bling)' : ''}` }); continue; }
     try {
       resultados.push(await sincronizarRecurso(R, s));
     } catch (e) {
       if (e.codigo === 'desconectado') throw e;
+      if (e.codigo === 'limite') parado = e;
       const msg = `${R.rotulo}: ${e.message}`;
       await db.query(
         `INSERT INTO bling_sync_recurso (recurso, ultima_execucao, mensagem) VALUES ($1, now(), $2)
          ON CONFLICT (recurso) DO UPDATE SET ultima_execucao = now(), mensagem = $2`, [R.nome, msg]);
       resultados.push({ recurso: R.nome, erro: e.message, codigo: e.codigo, mensagem: msg });
     }
+  }
+  s.limite = total;
+  } finally {
+    await db.query(`UPDATE bling_sync_trava SET ate = now() WHERE id = 1`);
   }
   const mensagem = resultados.map((r) => r.mensagem).join(' · ') + '.'
     + (s.semContatos ? ' Aviso: sem permissão de Contatos no Bling; documentos sem CEP ficaram sem endereço.' : '');
