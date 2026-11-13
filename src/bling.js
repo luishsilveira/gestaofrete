@@ -146,6 +146,10 @@ async function blingGet(token, caminho, fetchImpl = fetch) {
   try { j = await r.json(); } catch { /* sem JSON */ }
   if (r.status === 401) throw new BlingErro('O Bling recusou o acesso. Conecte de novo ao Bling.', 409, 'desconectado');
   if (r.status === 404) return null;
+  if (r.status === 403) {
+    const recurso = caminho.split('?')[0].replace(/\/\d+$/, '').replace(/^\//, '');
+    throw new BlingErro(`O aplicativo do Bling não tem permissão para consultar "${recurso}". Inclua esse escopo no aplicativo do Bling e conecte de novo.`, 403, 'permissao');
+  }
   if (r.status === 429) throw new BlingErro('O Bling limitou as consultas por alguns segundos. Tente de novo.', 429, 'limite');
   if (!r.ok) {
     const det = j && j.error && (j.error.description || j.error.message);
@@ -164,8 +168,10 @@ export async function obterPedido(token, id, fetchImpl = fetch) {
   if (!p) return null;
   const et = (p.transporte && p.transporte.etiqueta) || {};
   if (soDigitos(et.cep).length !== 8 && p.contato && p.contato.id) {
-    const c = await blingGet(token, `/contatos/${p.contato.id}`, fetchImpl);
-    if (c && c.data) p._contato = { endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
+    try {
+      const c = await blingGet(token, `/contatos/${p.contato.id}`, fetchImpl);
+      if (c && c.data) p._contato = { endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
+    } catch (e) { if (e.codigo !== 'permissao') throw e; p._semPermissaoContatos = true; }
   }
   return p;
 }
@@ -302,16 +308,18 @@ export async function sincronizarPedidos(env, db, fetchImpl = fetch, opcoes = {}
 
   // 3) lê os detalhes dentro do limite de chamadas
   const gravar = [];
-  let pendentes = 0;
+  let pendentes = 0, semContatos = false;
   for (const { p } of fila) {
     if (chamadas + 2 > limiteChamadas) { pendentes++; continue; }
     const det = await get(`/pedidos/vendas/${p.id}`);
     const bruto = det && det.data;
     if (!bruto) continue;
     const et = (bruto.transporte && bruto.transporte.etiqueta) || {};
-    if (soDigitos(et.cep).length !== 8 && bruto.contato && bruto.contato.id) {
-      const c = await get(`/contatos/${bruto.contato.id}`);
-      if (c && c.data) bruto._contato = { endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
+    if (soDigitos(et.cep).length !== 8 && bruto.contato && bruto.contato.id && !semContatos) {
+      try {
+        const c = await get(`/contatos/${bruto.contato.id}`);
+        if (c && c.data) bruto._contato = { endereco: c.data.endereco || null, numeroDocumento: c.data.numeroDocumento || null };
+      } catch (e) { if (e.codigo !== 'permissao') throw e; semContatos = true; }
     }
     gravar.push({ n: normalizarPedido(bruto), bruto });
   }
@@ -333,12 +341,13 @@ export async function sincronizarPedidos(env, db, fetchImpl = fetch, opcoes = {}
 
   // 5) registra o ciclo; só avança a data quando não sobrou nada pendente
   const completo = pendentes === 0 && listaCompleta;
-  const msg = `${gravar.length} pedido(s) lido(s) do Bling${pendentes ? `, ${pendentes} pendente(s) para a próxima execução` : ''}.`;
+  const msg = `${gravar.length} pedido(s) lido(s) do Bling${pendentes ? `, ${pendentes} pendente(s) para a próxima execução` : ''}.`
+    + (semContatos ? ' Aviso: sem permissão de Contatos no Bling; pedidos sem CEP na etiqueta ficaram sem endereço.' : '');
   await db.query(
     `INSERT INTO bling_sync (id, ultima_execucao, ultimo_completo, mensagem) VALUES (1, now(), $1, $2)
      ON CONFLICT (id) DO UPDATE SET ultima_execucao = now(),
        ultimo_completo = COALESCE($1, bling_sync.ultimo_completo), mensagem = $2`,
     [completo ? inicioCiclo : null, msg],
   );
-  return { lidos: gravar.length, pendentes, listados: lista.length, chamadas, completo, mensagem: msg };
+  return { lidos: gravar.length, pendentes, listados: lista.length, chamadas, completo, semContatos, mensagem: msg };
 }

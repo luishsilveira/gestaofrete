@@ -80,4 +80,12 @@ let L = run('');
 t('lista com cotação e situação', L.length === 3 && L.find((x) => x.id === 103).cotacao_id && L.find((x) => x.id === 101).situacao === 'Em aberto');
 t('filtro sem cotação', run('WHERE c.id IS NULL').length === 2);
 t('filtro frete acima da cotação (400 > 331,25)', run('WHERE p.frete_bling > 0 AND c.id IS NOT NULL AND p.frete_bling > COALESCE(c.valor_escolhido, c.melhor_valor) + 0.01').map((x) => x.id).join() === '103');
+// sem permissão de Contatos: importação continua
+psql(`DELETE FROM pedidos_bling; DELETE FROM bling_sync;`);
+const fetch403 = async (url) => (url.includes('/contatos/') ? { ok: false, status: 403, json: async () => ({ error: { description: 'The request requires higher privileges than provided by the access token' } }) } : fakeFetch(url));
+r = await sincronizarPedidos(env, db, fetch403);
+t(`sem permissão de Contatos: ${r.mensagem}`, r.lidos === 3 && r.semContatos && psql(`SELECT cep IS NULL FROM pedidos_bling WHERE id=102;`).trim() === 't');
+// 403 em pedidos: mensagem clara
+try { await sincronizarPedidos(env, db, async () => ({ ok: false, status: 403, json: async () => ({}) })); t('403 pedidos', false); }
+catch (e) { t('403 em pedidos → ' + e.message, e.codigo === 'permissao' && /pedidos\/vendas/.test(e.message)); }
 console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);
