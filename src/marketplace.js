@@ -71,13 +71,16 @@ export async function analisarMarketplace(db, opcoes = {}) {
   const fixos = await lerFixos(db);
   const fixoDe = (id, codigo) => { const f = fixos.find((x) => (x.produto_id && String(x.produto_id) === String(id)) || (codigo && x.codigo === codigo)); return f ? num(f.valor) : null; };
 
-  const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set();
+  const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set(), nomesSemPeso = new Set();
   const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
   const linhasPedidos = [];
 
   for (const p of pedidos) {
     const its = itens.filter((i) => String(i.doc_id) === String(p.id));
-    const total = num(p.total), comissao = num(p.comissao), frete = num(p.frete), ipi = num(p.ipi);
+    // vendido = valor base do marketplace (o que o comprador pagou). O total do pedido no Bling pode ser
+    // diferente (ex.: pedido 3510: total R$ 129,49 com preço de lista + IPI; base no Mercado Livre R$ 116,00).
+    const total = num(p.valor_base) > 0 ? num(p.valor_base) : num(p.total), comissao = num(p.comissao), frete = num(p.frete), ipi = num(p.ipi);
+    p.total_bling = num(p.total); p.total = total;
     const liquido = total - comissao - frete;
     const base = liquido - (descontarIpi ? ipi : 0); // valor a dividir entre os produtos
     resumo.pedidos++; resumo.total += total; resumo.comissao += comissao; resumo.frete += frete; resumo.ipi += ipi; resumo.liquido += liquido; resumo.base += base;
@@ -100,12 +103,15 @@ export async function analisarMarketplace(db, opcoes = {}) {
       const variaveis = L.filter((c) => !c.fixo);
       const pesoVar = variaveis.reduce((s, c) => s + c.pesoUnit * c.qtd, 0);
       const qtdVar = variaveis.reduce((s, c) => s + c.qtd, 0);
-      if (variaveis.some((c) => !(c.pesoUnit > 0))) { resumo.semPeso++; avisos.add('Há componentes sem peso cadastrado no Bling: o rateio desses pedidos usa a quantidade.'); }
-      const porPeso = pesoVar > 0 && variaveis.every((c) => c.pesoUnit > 0);
+      // pelo peso; componentes sem peso cadastrado ficam com zero (e geram aviso). Só sem nenhum peso: pela quantidade.
+      const semPeso = variaveis.filter((c) => !(c.pesoUnit > 0));
+      if (semPeso.length) { resumo.semPeso++; semPeso.forEach((c) => nomesSemPeso.add(`${c.codigo || ''} ${c.nome || ''}`.trim())); }
+      const porPeso = pesoVar > 0;
       for (const c of variaveis) c.valor = porPeso ? resto * c.pesoUnit * c.qtd / pesoVar : (qtdVar > 0 ? resto * c.qtd / qtdVar : 0);
+      if (porPeso) for (const c of semPeso) c.semPeso = true;
       for (const c of L) {
         c.peso = c.pesoUnit * c.qtd;
-        comps.push({ item: i.codigo, ...c, valor: r2(c.valor), rateio: c.fixo ? 'fixo' : porPeso ? 'peso' : 'quantidade' });
+        comps.push({ item: i.codigo, ...c, valor: r2(c.valor), rateio: c.fixo ? 'fixo' : c.semPeso ? 'sem peso' : porPeso ? 'peso' : 'quantidade' });
         const k = c.id, g = porProduto.get(k) || { id: k, codigo: c.codigo, nome: c.nome, preco: c.preco != null ? num(c.preco) : null, fixo: !!c.fixo, qtd: 0, peso: 0, valor: 0, pedidos: new Set() };
         g.qtd += c.qtd; g.peso += c.peso; g.valor += c.valor; g.pedidos.add(p.id); porProduto.set(k, g);
         resumo.peso += c.peso;
@@ -128,6 +134,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
     liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.peso > 0 ? r2(a.liquido / a.peso) : null,
     pctRecebido: a.total > 0 ? Math.round(a.liquido / a.total * 1000) / 10 : null })).sort((a, b) => b.liquido - a.liquido);
 
+  if (nomesSemPeso.size) avisos.add(`Sem peso cadastrado no Bling (ficam fora do rateio pelo peso; configure como valor fixo ou cadastre o peso): ${[...nomesSemPeso].slice(0, 8).join('; ')}${nomesSemPeso.size > 8 ? '…' : ''}.`);
   if (resumo.semTaxas) avisos.add(`${resumo.semTaxas} pedido(s) sem as taxas do marketplace no Bling: considerados sem comissão e sem frete.`);
   if (!fixos.length) avisos.add('Nenhum componente com valor fixo configurado (ex.: lacre a R$ 0,18): tudo é rateado pelo peso.');
   for (const k of ['total', 'comissao', 'frete', 'ipi', 'liquido', 'base']) resumo[k] = r2(resumo[k]);

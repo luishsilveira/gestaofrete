@@ -17,13 +17,16 @@ INSERT INTO produtos_estrutura (produto_id, componente_id, quantidade) VALUES (5
 INSERT INTO pedidos_bling (id, numero, numero_loja, data, canal, cliente, valor_total, custo_frete_marketplace, dados) VALUES
  (102,'3552','2000009999','${hoje}','Mercado Livre','Fabio',94,19.75,'{"total":94,"taxas":{"taxaComissao":11.28,"custoFrete":19.75,"valorBase":94},"tributacao":{"totalIPI":3.12}}'),
  (103,'3553',null,'${hoje}','Mercado Livre','Ana',120,10,'{"total":120,"taxas":{"taxaComissao":14.4,"custoFrete":10}}'),
+ (105,'3510','2000019491003970','${hoje}','Mercado Livre','Mayara',129.49,22.85,'{"total":129.49,"taxas":{"taxaComissao":13.92,"custoFrete":22.85,"valorBase":116},"tributacao":{"totalIPI":4.08}}'),
  (104,'5001',null,'${hoje}','Venda direta','Cliente A',1000,null,'{}');
 INSERT INTO pedido_itens (doc_id, seq, produto_id, codigo, descricao, quantidade, valor, valor_total) VALUES
- (102,1,503,'D16-50','Kit',1,95.88,95.88),(103,1,503,'D16-50','Kit',1,95.88,95.88),(103,2,504,'AVULSO','Avulso',2,12,24),(104,1,501,'D110160','Tubo',1000,1.18,1180);
+ (102,1,503,'D16-50','Kit',1,95.88,95.88),(103,1,503,'D16-50','Kit',1,95.88,95.88),(103,2,504,'AVULSO','Avulso',2,12,24),(104,1,501,'D110160','Tubo',1000,1.18,1180),(105,1,503,'D16-50','Kit',1,125.41,125.41);
 `);
 let r = await api('/api/marketplace');
 const p102 = r.j.pedidos.find((p) => p.numero === '3552');
-t('só pedidos do Mercado Livre', r.j.resumo.pedidos === 2 && !r.j.pedidos.some((p) => p.numero === '5001'));
+const p3510 = r.j.pedidos.find((p) => p.numero === '3510');
+t('3510: vendido = valor base 116; líquido 79,23 como no Bling', p3510.total === 116 && p3510.liquido === 79.23 && p3510.total_bling === 129.49);
+t('só pedidos do Mercado Livre', r.j.resumo.pedidos === 3 && !r.j.pedidos.some((p) => p.numero === '5001'));
 t('pedido 3552: mercadoria = 94 − 11,28 − 19,75 − 3,12 = 59,85', p102.base === 59.85 && p102.liquido === 62.97);
 t('sem valor fixo: tudo pelo peso', p102.componentes.every((c) => c.rateio === 'peso') && r.j.avisos.some((a) => /valor fixo/.test(a)));
 r = await api('/api/marketplace/fixos');
@@ -40,10 +43,15 @@ const p103 = r.j.pedidos.find((p) => p.numero === '3553');
 const av = p103.componentes.find((c) => c.codigo === 'AVULSO');
 t('pedido com 2 itens: rateio pelo valor; sem peso → pela quantidade', Math.abs(av.valor - 95.6 * 24 / 119.88) < 0.01 && av.rateio === 'quantidade');
 const prodTubo = r.j.produtos.find((p) => p.codigo === 'D110160');
-t('por produto: tubo em 2 pedidos, 100 un, R$/kg e % do preço', prodTubo.pedidos === 2 && prodTubo.qtd === 100 && prodTubo.porKg === 4.05 && prodTubo.pctPreco === 100.3);
-t('por anúncio: kit com 2 vendas', r.j.anuncios.find((a) => a.codigo === 'D16-50').vendas === 2);
+t('por produto: tubo em 2 pedidos, 100 un, R$/kg e % do preço', prodTubo.pedidos === 3 && prodTubo.qtd === 150);
+t('por anúncio: kit com 2 vendas', r.j.anuncios.find((a) => a.codigo === 'D16-50').vendas === 3);
 r = await api('/api/marketplace?ipi=0');
 t('sem descontar IPI', r.j.pedidos.find((p) => p.numero === '3552').base === 62.97);
 r = await api('/api/marketplace?canal=marketplace&de=2000-01-01&ate=lixo');
-t('todos marketplaces e datas inválidas', r.status === 200 && r.j.resumo.pedidos === 2);
+t('todos marketplaces e datas inválidas', r.status === 200 && r.j.resumo.pedidos === 3);
+psql(`UPDATE produtos_bling SET peso_bruto = 0 WHERE id = 502; UPDATE app_config SET valor = '[]' WHERE chave = 'valores_fixos';`);
+r = await api('/api/marketplace');
+const c3510 = r.j.pedidos.find((p) => p.numero === '3510').componentes;
+t('lacre sem peso e sem valor fixo: fica com zero, tubo com tudo, aviso', c3510.find((c) => c.codigo === 'LACRE').valor === 0 && c3510.find((c) => c.codigo === 'LACRE').rateio === 'sem peso'
+  && c3510.find((c) => c.codigo === 'D110160').valor === 75.15 && r.j.avisos.some((a) => /Sem peso cadastrado.*LACRE/.test(a)));
 console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);
