@@ -201,6 +201,10 @@ async function divergencias(url, env, ctx) {
     SELECT m.*, c.criado_em AS cotado_em, c.cliente, c.pedido, c.cep, c.cidade, c.uf, c.peso_real, c.peso_taxado, c.valor_nf,
            c.volumes, c.com_icms, c.regra_tonelada, c.versao_app,
            (SELECT r->>'praca' FROM jsonb_array_elements(c.resultados) r WHERE r->>'transportadora' = m.transportadora LIMIT 1) AS praca,
+           (SELECT string_agg((i->>'n') || COALESCE(' (' || NULLIF(i->>'d', '') || ')', '') || ': ' || (i->>'v'), ' | ')
+              FROM jsonb_array_elements(c.resultados) r, jsonb_array_elements(COALESCE(r->'itens', '[]'::jsonb)) i
+             WHERE r->>'transportadora' = m.transportadora) AS composicao,
+           c.m3, c.volumes AS qtd_volumes,
            m.valor_manual - m.valor_calculado AS diferenca,
            ROUND((m.valor_manual - m.valor_calculado) / NULLIF(m.valor_calculado, 0) * 100, 2) AS diferenca_pct,
            CASE WHEN c.peso_real <= 50 THEN 'até 50 kg' WHEN c.peso_real <= 100 THEN '51 a 100 kg' WHEN c.peso_real <= 200 THEN '101 a 200 kg'
@@ -222,7 +226,7 @@ async function divergencias(url, env, ctx) {
                 JOIN cotacoes c ON c.id = m.cotacao_id WHERE m.valor_calculado IS NULL ORDER BY m.criado_em DESC LIMIT 500`),
     // Cotação online (API) × tabela, gravadas juntas em cada cotação salva
     db.query(`SELECT c.id AS cotacao_id, c.criado_em, r->>'transportadora' AS transportadora, c.cidade, c.uf, c.cep, c.peso_real, c.peso_taxado, c.valor_nf,
-                     r->>'praca_tabela' AS praca, (r->>'valor_tabela')::numeric AS tabela, (r->>'valor_online')::numeric AS online,
+                     r->>'praca_tabela' AS praca, (r->>'valor_tabela')::numeric AS tabela, c.com_icms, c.volumes, r->>'erro_online' AS erro_online, (r->>'valor_online')::numeric AS online,
                      r->>'cotacao_online' AS cotacao_online, r->>'prazo' AS prazo,
                      (r->>'valor_online')::numeric - (r->>'valor_tabela')::numeric AS diferenca,
                      ROUND(((r->>'valor_online')::numeric - (r->>'valor_tabela')::numeric) / NULLIF((r->>'valor_tabela')::numeric, 0) * 100, 2) AS diferenca_pct

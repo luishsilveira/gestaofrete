@@ -868,7 +868,7 @@ async function analiseDivergencias(){
       L.map(r=>`<tr><td>${esc(r.grupo)}</td><td class="n">${r.n}</td><td class="n">${brl(+r.media_dif)}</td><td class="n">${pc(r.media_pct)}</td><td class="n">${pc(r.media_abs_pct)}</td>
         <td class="n">${pc(r.min_pct)} / ${pc(r.max_pct)}</td><td class="n">${r.acima} / ${r.abaixo}</td></tr>`).join('')+'</table>':'';
     const L=d.linhas;
-    $('h_div').innerHTML=`<div class="card"><div class="hist-top"><h2 style="margin:0">Análise de divergências</h2><button class="btn btn2" id="d_csv">Baixar planilha (CSV)</button></div>
+    $('h_div').innerHTML=`<div class="card"><div class="hist-top"><h2 style="margin:0">Análise de divergências</h2><span style="flex:1"></span><button class="btn btn2 btn-mini" id="d_xlsx">Exportar Excel</button><button class="btn btn2 btn-mini" id="d_csv">Exportar CSV</button></div>
       ${L.length?`<p class="small">${L.length} valor(es) manual(is) comparado(s) com o calculado. Diferença positiva = a transportadora cobrou mais que o sistema calculou.</p>
       ${res('Por transportadora',d.por_transportadora)}${res('Por motivo informado',d.por_motivo)}${res('Por transportadora e UF',d.por_uf)}${res('Por transportadora e faixa de peso',d.por_peso)}
       <h3>Casos</h3><div class="tbl-wrap"><table class="mini"><tr><th>Data</th><th>Cotação</th><th>Transportadora</th><th>Destino</th><th>Praça</th><th class="n">Peso</th><th class="n">NF</th><th class="n">Calculado</th><th class="n">Informado</th><th class="n">Diferença</th><th>Motivo</th><th>Obs.</th></tr>
@@ -885,11 +885,18 @@ async function analiseDivergencias(){
       ${d.sem_calculo.length?`<h3>Transportadoras que o sistema não cotou (${d.sem_calculo.length})</h3><table class="mini"><tr><th>Data</th><th>Transportadora</th><th>Destino</th><th class="n">Peso</th><th class="n">Informado</th><th>Obs.</th></tr>`+
         d.sem_calculo.map(m=>`<tr><td>${dataBR(m.criado_em)}</td><td>${esc(m.transportadora)}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_manual)}</td><td class="small">${esc(m.observacao||'')}</td></tr>`).join('')+'</table>':''}</div>`;
     $('h_div').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{ irPara('hist'); detalheHistorico(tr.dataset.id); });
-    const b=$('d_csv'); if(b) b.onclick=()=>{
-      const cols=['cotacao_id','criado_em','usuario','transportadora','cidade','uf','cep','praca','peso_real','peso_taxado','valor_nf','volumes','com_icms','valor_calculado','valor_manual','diferenca','diferenca_pct','prazo_manual','motivo','referencia','observacao','cliente','pedido'];
-      const cel=v=>{ v=v==null?'':String(v); if(/^-?\d+(\.\d+)?$/.test(v)) v=v.replace('.',','); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-      const csv='﻿'+cols.join(';')+'\n'+L.map(m=>cols.map(c=>cel(m[c])).join(';')).join('\n');
-      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='divergencias-frete.csv'; a.click(); };
+    const colsM=[['Cotação',9],['Data',11,'data'],['Usuário',26],['Transportadora',24],['Cidade',22],['UF',5],['CEP',10],['Praça',18],['Peso real (kg)',11,'kg'],['Peso taxado (kg)',11,'kg'],['m³',8,'kg'],['Volumes',8,'int'],['Valor NF',12,'brl'],['Com ICMS',8],
+      ['Calculado',12,'brl'],['Informado',12,'brl'],['Diferença',12,'brl'],['Diferença %',10,'pct'],['Prazo informado',10],['Motivo',26],['Referência',16],['Observação',30],['Cliente',26],['Pedido',10],['Composição do cálculo',120]];
+    const linM=L.map(m=>[m.cotacao_id,m.criado_em,m.usuario,m.transportadora,m.cidade,m.uf,m.cep,m.praca,+m.peso_real||null,+m.peso_taxado||null,+m.m3||null,+m.qtd_volumes||+m.volumes||null,+m.valor_nf||null,m.com_icms?'sim':'não',
+      +m.valor_calculado,+m.valor_manual,+m.diferenca,+m.diferenca_pct,m.prazo_manual||'',m.motivo||'',m.referencia||'',m.observacao||'',m.cliente||'',m.pedido||'',m.composicao||'']);
+    const OL=(d.online&&d.online.linhas)||[];
+    const colsO=[['Cotação',9],['Data',11,'data'],['Transportadora',22],['Cidade',22],['UF',5],['CEP',10],['Praça (tabela)',18],['Peso (kg)',10,'kg'],['Peso taxado (kg)',11,'kg'],['Volumes',8,'int'],['Valor NF',12,'brl'],['Com ICMS',8],['Tabela',12,'brl'],['Online',12,'brl'],['Diferença',12,'brl'],['Diferença %',10,'pct'],['Prazo online',10],['Nº cotação',14]];
+    const linO=OL.map(m=>[m.cotacao_id,m.criado_em,m.transportadora,m.cidade,m.uf,m.cep,m.praca,+m.peso_real||null,+m.peso_taxado||null,+m.volumes||null,+m.valor_nf||null,m.com_icms?'sim':'não',+m.tabela,+m.online,+m.diferenca,+m.diferenca_pct,m.prazo||'',m.cotacao_online||'']);
+    const colsS=[['Data',11,'data'],['Transportadora',24],['Cidade',22],['UF',5],['Peso (kg)',10,'kg'],['Informado',12,'brl'],['Observação',40]];
+    const linS=d.sem_calculo.map(m=>[m.criado_em,m.transportadora,m.cidade,m.uf,+m.peso_real||null,+m.valor_manual,m.observacao||'']);
+    const hoje=new Date().toISOString().slice(0,10);
+    $('d_xlsx').onclick=()=>baixarXLSX(`divergencias-frete-${hoje}.xlsx`,[{nome:'Manual x calculado',cols:colsM,linhas:linM},{nome:'Online x tabela',cols:colsO,linhas:linO},{nome:'Sem cálculo do sistema',cols:colsS,linhas:linS}]);
+    $('d_csv').onclick=()=>baixarCSV(`divergencias-frete-${hoje}.csv`,colsM,linM);
   }catch(e){ $('h_div').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 
