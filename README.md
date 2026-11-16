@@ -80,6 +80,13 @@ Mostra quanto a Proloplast recebe de fato pelos produtos vendidos no Mercado Liv
 - **API:** `GET /api/marketplace?de=&ate=&canal=Mercado Livre|Shopee|…|marketplace&ipi=0|1` · `GET|POST /api/marketplace/fixos`.
 - **Testes:** `node tests/marketplace.test.mjs`.
 
+## Regras ajustadas pelas divergências (16/11/2026)
+
+- **Expresso São Miguel:** sem ICMS em entregas dentro do RS (`semIcmsUf: ["RS"]` na tabela). Conferido em Sobradinho, Vacaria, Ipiranga do Sul e Panambi. Para fora do RS o ICMS continua (Cascavel/PR bate).
+- **Bento Brasil:** sem pedágio quando vale o frete mínimo (`pedagioNoMinimo: false`). Conferido em Dianópolis/TO e São Miguel do Araguaia/GO.
+- **Braspress:** tabela marcada como desatualizada (`tabelaDesatualizada: true`; 34% a 44% abaixo em Naviraí/MS, Belo Horizonte/MG e Nova Olinda do Maranhão/MA). Vale a cotação online. O botão "Salvar cotação" espera a cotação online terminar (até 20 s) antes de gravar.
+- **Pendente:** na cotação online da Braspress falta uma taxa fixa de cerca de R$ 6,20 (Itápolis/SP, 36 e 70,8 kg; R$ 7,32 em Heliópolis/BA). Perguntar à Braspress que taxa é e se a API permite incluí-la.
+
 ## Valores cotados manualmente (divergências)
 
 Quando a transportadora informa um valor diferente do calculado (site, e-mail, telefone, CT-e), o valor é registrado para análise posterior.

@@ -246,5 +246,9 @@
    "kg": 0.699,
    "fvPct": 0.5
   }
- ]
+ ],
+ "semIcmsUf": [
+  "RS"
+ ],
+ "obsIcms": "Sem ICMS em entregas dentro do RS (conferido em 4 cotações: Sobradinho, Vacaria, Ipiranga do Sul, Panambi, 13 e 16/11/2026)"
 }

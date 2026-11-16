@@ -170,7 +170,8 @@ function cotar(t,r,p,nf,uf,op,rvx={}){
     const gm=(g.minPorUf&&g.minPorUf[uf])||g.min||0;
     add('GRIS',Math.max(nf*pc/100,gm),`${pc.toLocaleString('pt-BR')}% × NF${gm?' (mín. '+brl(gm)+')':''}`); }
   (rvx.extras||[]).forEach(e=>{ if(e.faixas){ const j=e.faixas.findIndex(x=>p<=x[0]), f=e.faixas[j]; add(e.n,f[1],f[0]>=1e9?`acima de ${e.faixas[j-1][0]} kg`:`até ${f[0]} kg`); } else add(e.n,e.v,e.d); });
-  const fr=Math.ceil(p/100), pv=(t.pedagioUf&&t.pedagioUf[uf])||t.pedagio; add('Pedágio',fr*pv,`${fr} fração(ões) de 100 kg × ${brl(pv)}`);
+  // Bento: o frete mínimo já inclui o pedágio (pedagioNoMinimo: false na tabela)
+  if(!(f.min&&t.pedagioNoMinimo===false)){ const fr=Math.ceil(p/100), pv=(t.pedagioUf&&t.pedagioUf[uf])||t.pedagio; add('Pedágio',fr*pv,`${fr} fração(ões) de 100 kg × ${brl(pv)}`); }
   (t.fixas||[]).forEach(x=>{ if(x.pesoAcima&&p<=x.pesoAcima)return; if(x.ufs&&!x.ufs.includes(uf))return; add(x.nome,x.valor); });
   (t.pctFrete||[]).forEach(x=>{ if(x.uf&&x.uf!==uf)return; add(x.nome,Math.max(fp*x.pct/100,x.min||0),`${x.pct}% s/ frete peso${x.min?' (mín. '+brl(x.min)+')':''}`); });
   (t.opcionais||[]).forEach(x=>{
@@ -182,8 +183,10 @@ function cotar(t,r,p,nf,uf,op,rvx={}){
   let sub=it.reduce((s,x)=>s+x.v,0);
   (t.pctSubtotal||[]).forEach(x=>{ const v=Math.max(sub*x.pct/100,x.min||0); add(x.nome,v,`${x.pct.toLocaleString('pt-BR')}% s/ subtotal`); sub+=v; });
   let icms=0, al=0;
-  if(op.icms){ al=aliqICMS(uf); icms=sub/(1-al/100)-sub; }
-  return {it,sub,icms,al,total:sub+icms};
+  // São Miguel: sem ICMS em entregas dentro do RS (semIcmsUf na tabela)
+  const semIcms=(t.semIcmsUf||[]).includes(uf);
+  if(op.icms&&!semIcms){ al=aliqICMS(uf); icms=sub/(1-al/100)-sub; }
+  return {it,sub,icms,al,total:sub+icms,semIcms:op.icms&&semIcms};
 }
 
 function calc(){
@@ -236,7 +239,7 @@ function calc(){
   if(simples){
     let h=res.map((x,k)=>{ const prazo=x.rv.prazo||x.r.prazo;
       return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?' consultando online…':' online indisponível'):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?(x.t.tabelaDesatualizada?' <span class="aviso">tabela desatualizada · aguarde a cotação online…</span>':' consultando online…'):(x.t.tabelaDesatualizada?' <span class="aviso">online indisponível · tabela desatualizada, confira o valor</span>':' online indisponível')):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
@@ -256,7 +259,7 @@ function calc(){
       <table><tr><th>Componente</th><th>Base</th><th class="n">Valor</th></tr>
       ${x.it.map(i=>`<tr><td>${i.n}</td><td class="small">${i.d}</td><td class="n">${brl(i.v)}</td></tr>`).join('')}
       ${x.api?'':`<tr><td>Subtotal</td><td></td><td class="n">${brl(x.sub)}</td></tr>`}
-      ${x.icms?`<tr><td>ICMS</td><td class="small">${x.al}% por dentro</td><td class="n">${brl(x.icms)}</td></tr>`:''}
+      ${x.icms?`<tr><td>ICMS</td><td class="small">${x.al}% por dentro</td><td class="n">${brl(x.icms)}</td></tr>`:''}${x.semIcms?`<tr><td>ICMS</td><td class="small">não cobrado pela transportadora neste destino</td><td class="n">—</td></tr>`:''}
       <tr class="tot"><td>Total</td><td></td><td class="n">${brl(x.total)}</td></tr></table></div></div>`;}).join('');
   if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
   if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>`<b>${n.t.transportadora}</b> – ${n.msg}`).join('<br>')}</div>`;
@@ -562,7 +565,12 @@ api('/api/eu').then(async j=>{ API_OK=true; $('usuario').textContent=j.usuario; 
   .catch(()=>{ API_OK=false; });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
-  const b=$('s_btn'); b.disabled=true; $('s_status').className='small'; $('s_status').textContent='Salvando…';
+  const b=$('s_btn'); b.disabled=true; $('s_status').className='small';
+  // espera a cotação online terminar, para não gravar o valor da tabela por pressa
+  if(ONL.pend){ $('s_status').textContent='Aguardando a cotação online das transportadoras…';
+    for(let i=0;i<40&&ONL.pend;i++) await new Promise(r=>setTimeout(r,500));
+    calc(); }
+  $('s_status').textContent='Salvando…';
   const corpo={cliente:$('s_cliente').value.trim(),pedido:$('s_pedido').value.trim(),observacao:$('s_obs').value.trim(),
     cep:fmtCep(dest.cep),cidade:dest.cidade||'',uf:ULT.uf,peso_real:ULT.peso,peso_taxado:ULT.pt,valor_nf:ULT.nf,
     volumes:+$('qv').value||null,m3:ULT.m3,com_icms:ULT.icms,regra_tonelada:tonMode,versao_app:VERSAO,

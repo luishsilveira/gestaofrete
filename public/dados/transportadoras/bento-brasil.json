@@ -168,5 +168,7 @@
  ],
  "mapa": null,
  "acima": null,
- "pctSubtotal": []
+ "pctSubtotal": [],
+ "pedagioNoMinimo": false,
+ "obsPedagio": "Sem pedágio quando vale o frete mínimo (conferido em Dianópolis/TO e São Miguel do Araguaia/GO, 13 e 16/11/2026)"
 }
