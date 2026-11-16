@@ -311,7 +311,7 @@ const TITULOS={calc:'Calcular frete','bling-pedidos':'Bling · Pedidos','bling-p
   hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
 const SECOES=['calc','tab','ped','hist','div','integ','cfg','json','mkt'];
 function irPara(p,carregar=true){
-  if(!TITULOS[p]) p='calc';
+  if(!TITULOS[p]||(p==='mkt'&&carregar&&!PODE_MKT)) p='calc';
   const sec=p.startsWith('bling-')?'ped':p;
   SECOES.forEach(x=>$(x).classList.toggle('hide',x!==sec));
   document.querySelectorAll('#menu a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
@@ -359,7 +359,7 @@ async function carregarIntegracoes(){
 const hojeISO=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const diasAtras=n=>new Date(Date.now()-n*864e5-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const n2=(v,c=2)=>(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c});
-let MKT=null;
+let MKT=null, PODE_MKT=false;
 document.querySelectorAll('#mkt [data-dias]').forEach(b=>b.onclick=()=>{ $('m_de').value=diasAtras(+b.dataset.dias); $('m_ate').value=hojeISO(); carregarMkt(); });
 ['m_de','m_ate','m_canal','m_ipi'].forEach(id=>$(id).addEventListener('change',()=>carregarMkt()));
 $('m_fixos_btn').onclick=()=>{ $('m_fixos').classList.toggle('hide'); if(!$('m_fixos').classList.contains('hide')) carregarFixos(); };
@@ -505,7 +505,7 @@ const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
-api('/api/eu').then(async j=>{ API_OK=true; $('usuario').textContent=j.usuario; calc(); await iniciarBling(); iniciarOnline(); const p=location.hash.slice(1); if(p&&p!=='calc') irPara(p); })
+api('/api/eu').then(async j=>{ API_OK=true; $('usuario').textContent=j.usuario; PODE_MKT=!!(j.permissoes&&j.permissoes.resultadoMarketplace); document.querySelectorAll('#menu .mk').forEach(e=>e.classList.toggle('hide',!PODE_MKT)); calc(); await iniciarBling(); iniciarOnline(); const p=location.hash.slice(1); if(p&&p!=='calc') irPara(p); })
   .catch(()=>{ API_OK=false; });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;

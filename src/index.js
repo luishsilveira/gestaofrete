@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS cotacoes (
 CREATE INDEX IF NOT EXISTS cotacoes_criado_em_idx ON cotacoes (criado_em DESC);
 `;
 
+// Quem pode ver o resultado no marketplace (valores recebidos por produto). Variável ACESSO_RESULTADO no
+// Cloudflare (e-mails separados por vírgula) substitui a lista padrão.
+const ACESSO_RESULTADO_PADRAO = ['luish.silveira@gmail.com', 'proloplasticos@gmail.com'];
+function acessoResultado(env, usuario) {
+  const lista = env.ACESSO_RESULTADO ? String(env.ACESSO_RESULTADO).split(/[,;\s]+/) : ACESSO_RESULTADO_PADRAO;
+  return lista.map((e) => e.trim().toLowerCase()).filter(Boolean).includes(String(usuario || '').trim().toLowerCase());
+}
+
 // Valores cotados fora do sistema (site, e-mail ou telefone da transportadora, CT-e) para conferir divergências.
 const SCHEMA_MANUAL = `
 CREATE TABLE IF NOT EXISTS cotacao_valores_manuais (
@@ -503,7 +511,8 @@ export default {
 
     const usuario = request.headers.get('cf-access-authenticated-user-email') || 'não identificado';
     try {
-      if (url.pathname === '/api/eu' && request.method === 'GET') return json({ usuario });
+      const podeResultado = acessoResultado(env, usuario);
+      if (url.pathname === '/api/eu' && request.method === 'GET') return json({ usuario, permissoes: { resultadoMarketplace: podeResultado } });
       if (url.pathname === '/api/cotacoes' && request.method === 'POST') return await salvarCotacao(request, env, ctx, usuario);
       if (url.pathname === '/api/cotacoes' && request.method === 'GET') return await listarCotacoes(url, env, ctx);
       if (url.pathname === '/api/bling/status') return await blingStatus(env, ctx);
@@ -540,6 +549,7 @@ export default {
         return json(await comBanco(env, ctx, (db) => testarIntegracao(env, db, String(d.id || ''), usuario)));
       }
       // resultado das vendas em marketplace (src/marketplace.js)
+      if (url.pathname.startsWith('/api/marketplace') && !podeResultado) return json({ erro: 'Acesso restrito: seu usuário não tem permissão para o resultado no marketplace.' }, 403);
       if (url.pathname === '/api/marketplace') {
         const q = url.searchParams;
         return json(await comBanco(env, ctx, (db) => analisarMarketplace(db, { de: q.get('de'), ate: q.get('ate'), canal: q.get('canal'), descontarIpi: q.get('ipi') !== '0' })));

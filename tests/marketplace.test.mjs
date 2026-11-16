@@ -2,9 +2,9 @@
 import worker from '../src/index.js';
 import { psql } from './pgpsql.mjs';
 let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
-const env = { HYPERDRIVE: { connectionString: 'x' }, ASSETS: { fetch: async () => new Response('') }, BLING_CLIENT_ID: 'c', BLING_CLIENT_SECRET: 's' };
-const api = async (path, method = 'GET', body) => {
-  const r = await worker.fetch(new Request('https://x.dev' + path, { method, body: body && JSON.stringify(body), headers: { 'cf-access-authenticated-user-email': 'luis@x' } }), env, { waitUntil() {} });
+const env = { HYPERDRIVE: { connectionString: 'x' }, ASSETS: { fetch: async () => new Response('') }, BLING_CLIENT_ID: 'c', BLING_CLIENT_SECRET: 's', ACESSO_RESULTADO: 'Luis@x, outra@y' };
+const api = async (path, method = 'GET', body, email = 'luis@x', e = env) => {
+  const r = await worker.fetch(new Request('https://x.dev' + path, { method, body: body && JSON.stringify(body), headers: { 'cf-access-authenticated-user-email': email } }), e, { waitUntil() {} });
   return { status: r.status, j: await r.json() };
 };
 await api('/api/eu'); await api('/api/cotacoes'); // cria o esquema
@@ -55,4 +55,11 @@ r = await api('/api/marketplace');
 const c3510 = r.j.pedidos.find((p) => p.numero === '3510').componentes;
 t('lacre sem peso e sem valor fixo: fica com zero, tubo com tudo, aviso', c3510.find((c) => c.codigo === 'LACRE').valor === 0 && c3510.find((c) => c.codigo === 'LACRE').rateio === 'sem peso'
   && c3510.find((c) => c.codigo === 'D110160').valor === 75.15 && r.j.avisos.some((a) => /Sem peso cadastrado.*LACRE/.test(a)));
+// ---- restrição de acesso
+t('sem permissão: 403 e /api/eu informa', (await api('/api/marketplace', 'GET', null, 'vendas@x')).status === 403 && (await api('/api/marketplace/fixos', 'POST', { fixos: [] }, 'vendas@x')).status === 403
+  && (await api('/api/eu', 'GET', null, 'vendas@x')).j.permissoes.resultadoMarketplace === false && (await api('/api/eu')).j.permissoes.resultadoMarketplace === true);
+const envPadrao = { ...env }; delete envPadrao.ACESSO_RESULTADO;
+t('lista padrão: Luis e Proloplasticos', (await api('/api/eu', 'GET', null, 'Proloplasticos@gmail.com', envPadrao)).j.permissoes.resultadoMarketplace === true
+  && (await api('/api/eu', 'GET', null, 'luish.silveira@gmail.com', envPadrao)).j.permissoes.resultadoMarketplace === true
+  && (await api('/api/marketplace', 'GET', null, 'vendasproloplast@gmail.com', envPadrao)).status === 403);
 console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);
