@@ -78,6 +78,8 @@
 <div><label>Alt. (m)</label><input id="a" type="number" value="0.55" step="0.01"></div>
 </div>
 <label>Qtd. de volumes com essas dimensões</label><input id="qv" type="number" value="1" min="1">
+<!-- Regras e taxas eventuais: ocultas a pedido do Luis (16/11/2026); continuam valendo com os valores padrão abaixo -->
+<div id="regras_ocultas" hidden>
 <h2 style="margin-top:18px">Regras</h2>
 <label>Coluna "Tonelada" (Trânsito Brasil, TJB)</label>
 <div class="mode" id="tonmode"><button data-m="exc" class="on">Excedente sobre última faixa</button><button data-m="tot">Peso total (mín. última faixa)</button></div>
@@ -90,6 +92,7 @@
 <label class="chk"><input type="checkbox" id="o_trt"> TRT – restrição de trânsito</label>
 <label class="chk"><input type="checkbox" id="o_ag"> Agendamento / comprovante de entrega</label>
 <label class="chk"><input type="checkbox" id="o_pal"> Paletização (1 pallet)</label>
+</div>
 </div>
 <div>
 <div class="card" style="padding:12px 18px;margin-bottom:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="flex:1"><span class="small">Peso taxado (maior entre real e cubado a 300 kg/m³): </span><b class="mono" id="pt"></b></div><label class="chk" style="margin:0;font-weight:500"><input type="checkbox" id="simples" checked> Visão simplificada (só valor e prazo)</label></div>
