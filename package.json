@@ -6,7 +6,8 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node tests/bling.test.mjs",
-    "test:sync": "node tests/sync.test.mjs"
+    "test:sync": "node tests/sync.test.mjs",
+    "test:online": "node tests/online.test.mjs"
   },
   "dependencies": {
     "pg": "^8.13.0"

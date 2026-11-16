@@ -197,7 +197,7 @@ r = await api('/api/cotacoes', 'POST', { uf: 'SP', cidade: 'Cravinhos', peso_rea
   resultados: [{ transportadora: 'Braspress', total: 162.05, fonte_valor: 'online', valor_online: 162.05, valor_tabela: 145.26, praca_tabela: 'Interior de SP 1', cotacao_online: '777' }] });
 await api('/api/cotacoes', 'POST', { uf: 'SP', resultados: [{ transportadora: 'Braspress', total: 150, fonte_valor: 'tabela', valor_tabela: 150, erro_online: 'timeout' }] });
 r = await api('/api/divergencias');
-t('Braspress online × tabela', r.j.braspress.linhas.length === 1 && +r.j.braspress.linhas[0].diferenca === 16.79 && r.j.braspress.por_praca[0].grupo === 'SP · Interior de SP 1' && +r.j.braspress.fontes.online === 1 && +r.j.braspress.fontes.tabela === 1);
+t('online × tabela', r.j.online.linhas.length === 1 && +r.j.online.linhas[0].diferenca === 16.79 && r.j.online.por_praca[0].grupo === 'Braspress · SP · Interior de SP 1' && +r.j.online.fontes[0].online === 1 && +r.j.online.fontes[0].tabela === 1);
 const idm = r.j.sem_calculo[0].id;
 t('remover manual', (await api(`/api/manuais/${idm}`, 'DELETE')).status === 200 && (await api(`/api/cotacoes/${idc}`)).j.valores_manuais.length === 2);
 

@@ -12,7 +12,10 @@ package.json                              dependências do servidor (driver Post
 src/index.js                              servidor: API do histórico de cotações e do Bling (/api/*)
 src/bling.js                              integração com o Bling (OAuth, tokens, chamadas à API)
 src/sync.js                               importação do Bling (pedidos, propostas, NF-e, produtos e kits)
-src/braspress.js                          cotação online da Braspress (API)
+src/online.js                             cotação online: integrações ativas, empresa remetente, registro das consultas
+src/apis/comum.js                         utilidades e o contrato dos conectores
+src/apis/braspress.js                     conector Braspress (API própria)
+src/apis/ssw.js                           conector SSW (Expresso Leomar e outras transportadoras do sistema SSW)
 public/index.html                         página
 public/css/app.css                        estilos
 public/js/app.js                          motor de cálculo e telas
@@ -51,16 +54,19 @@ public/_headers                           cache (dados sempre atualizados)
   - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
   - `GET /api/cotacoes/{id}`: detalhe completo
 
-## Braspress: cotação online (API)
+## Cotação online nas transportadoras (APIs)
 
-A Braspress é sempre cotada online pela API (`POST https://api.braspress.com/v1/cotacao/calcular/json`, autenticação Basic). O valor online substitui o da tabela no ranking; a tabela só é usada quando a API não responde ou dá erro (a linha mostra "cotação online indisponível"). A cotação salva registra os dois valores (`valor_online`, `valor_tabela`, `fonte_valor`, `cotacao_online`, `erro_online` em `resultados`), e a Análise de divergências compara online × tabela por UF e por praça.
+Para cada transportadora com integração ativa, a calculadora consulta a API e usa o valor online. A tabela só entra quando a API não responde ou dá erro. Cada linha do resultado mostra a etiqueta **online** ou **tabela**. A cotação salva registra os dois valores (`valor_online`, `valor_tabela`, `fonte_valor`, `cotacao_online`, `erro_online` em `resultados`), e a página Divergências compara online × tabela por transportadora, UF e praça.
 
-- **Credenciais:** secret `BRASPRESS_CONTAS` no Cloudflare (tipo Secret), JSON com uma conta por CNPJ: `[{"cnpj":"…","usuario":"…_PRD","senha":"…"}]`. Campos opcionais: `"cepOrigem"` e `"nome"`. Sem `cepOrigem`, o CEP vem do cadastro do CNPJ (BrasilAPI), guardado em `braspress_contas`.
-- **Remetente:** a calculadora mostra a lista de CNPJs. O padrão é `BRASPRESS_CNPJ_PADRAO` (variável opcional), ou o CNPJ de Nova Santa Rita, ou o primeiro.
-- **Requisição:** CIF (`tipoFrete` 1), rodoviário, CEP de destino, valor da NF, peso, volumes e dimensões (ou um cubo equivalente ao m³). Destinatário: CPF/CNPJ do pedido do Bling ou digitado; sem ele, vai um CPF genérico não cadastrado e a Braspress cota só pelo CEP.
-- **Cache e registro:** a cotação vale até 23:59 do dia; a mesma consulta no mesmo dia não chama a Braspress de novo. Todas as consultas (inclusive erros) ficam em `braspress_cotacoes`.
-- **API interna:** `GET /api/braspress/status` · `POST /api/braspress/cotar`.
-- **Testes:** `node tests/braspress.test.mjs` (Braspress simulada, PostgreSQL local).
+- **Conectores** (`src/apis/`): cada arquivo exporta `tipo`, `integracoes(env)` (lê as credenciais nos secrets) e `cotar(integracao, pedido)` → `{ total, prazo, id }`. Para incluir um conector novo, crie o arquivo e acrescente-o em `CONECTORES` (`src/online.js`).
+  - **Braspress** (`braspress.js`): `POST https://api.braspress.com/v1/cotacao/calcular/json`, Basic auth. Secret `BRASPRESS_CONTAS`: `[{"cnpj":"…","usuario":"…_PRD","senha":"…"}]`, uma conta por CNPJ. Usa a conta do CNPJ remetente. Compara com a tabela `bp`.
+  - **SSW** (`ssw.js`): web service SOAP `https://ssw.inf.br/ws/sswCotacao/index.php`, operação `cotar`. Atende qualquer transportadora do sistema SSW (Expresso Leomar e outras). Secret `SSW_TRANSPORTADORAS`: `[{"transportadora":"Expresso Leomar","dominio":"…","login":"…","senha":"…","cnpjPagador":"…"}]`. Opcionais: `id`, `tabela` (id da tabela de frete da mesma transportadora), `senhaPagador`, `mercadoria` (padrão 1), `extras` (outros parâmetros do web service).
+- **Pedido enviado:** CEP de origem e CNPJ da empresa remetente, CEP de destino, valor da NF, peso, volumes, dimensões (ou um cubo equivalente ao m³) e o CPF/CNPJ do destinatário (do Bling ou digitado; sem ele, só pelo CEP).
+- **Empresa remetente** (menu Configurações): CNPJ e CEP de origem, gravados em `app_config`. Sem configuração: CNPJ de Nova Santa Rita (cadastro em `cnpj_cadastro`, consultado em BrasilAPI, CNPJ.ws ou ReceitaWS) e CEP 92480-000.
+- **Integrações** (menu Transportadoras): situação de cada integração, consultas e taxa de sucesso em 30 dias, tempo médio, última consulta, chave "Usar cotação online" e botão "Testar conexão" (São Paulo/SP, 50 kg, NF R$ 1.000).
+- **Registro e cache:** todas as consultas, inclusive as que dão erro e os testes, ficam em `api_consultas`, sem senhas. A mesma consulta no mesmo dia vem do registro, sem chamar a transportadora. Tempo limite: 15 s por transportadora; as consultas rodam em paralelo.
+- **API interna:** `POST /api/online/cotar` · `GET /api/online/status` · `POST /api/online/ativar` · `POST /api/online/testar` · `GET|POST /api/config`.
+- **Testes:** `npm run test:online` (Braspress e SSW simulados, PostgreSQL local).
 
 ## Valores cotados manualmente (divergências)
 

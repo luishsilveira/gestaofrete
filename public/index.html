@@ -8,10 +8,33 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<aside id="menu">
+<div class="marca"><b>Proloplast</b><span>Gestão de frete</span></div>
+<nav>
+<div class="grupo">Cotar</div>
+<a href="#calc" data-p="calc"><i>◎</i>Calcular frete</a>
+<div class="grupo bl hide">Bling</div>
+<a href="#bling-pedidos" data-p="bling-pedidos" class="bl hide"><i>▤</i>Pedidos</a>
+<a href="#bling-propostas" data-p="bling-propostas" class="bl hide"><i>▤</i>Propostas</a>
+<a href="#bling-notas" data-p="bling-notas" class="bl hide"><i>▤</i>Notas fiscais</a>
+<a href="#bling-produtos" data-p="bling-produtos" class="bl hide"><i>▤</i>Produtos</a>
+<div class="grupo">Análises</div>
+<a href="#hist" data-p="hist"><i>☰</i>Histórico de cotações</a>
+<a href="#div" data-p="div"><i>△</i>Divergências</a>
+<div class="grupo">Transportadoras</div>
+<a href="#tab" data-p="tab"><i>▦</i>Tabelas de frete</a>
+<a href="#integ" data-p="integ"><i>⇄</i>Integrações (APIs)</a>
+<div class="grupo">Configurações</div>
+<a href="#cfg" data-p="cfg"><i>⚙</i>Empresa remetente</a>
+<a href="#json" data-p="json"><i>{ }</i>Modelo de dados</a>
+</nav>
+<div class="usuario small" id="usuario"></div>
+</aside>
+<div id="conteudo">
 <header>
-<h1>Cotação de Frete – Proloplast</h1>
-<p class="sub" id="subt">Carregando tabelas…</p>
-<nav><button data-t="calc" class="on">Calcular</button><button data-t="tab">Tabelas</button><button data-t="ped" id="tab_ped" class="hide">Bling</button><button data-t="hist">Histórico</button><button data-t="json">Modelo de dados</button></nav>
+<button id="abrir_menu" class="btn btn2" aria-label="Abrir menu">☰</button>
+<div><h1 id="titulo">Calcular frete</h1>
+<p class="sub" id="subt">Carregando tabelas…</p></div>
 </header>
 <main>
 <section id="calc">
@@ -33,6 +56,7 @@
 <input id="cid" list="cidades" placeholder="Ex.: CAMPINAS" autocomplete="off">
 <datalist id="cidades"></datalist>
 <div class="dest small" id="destinfo"></div>
+<label>CPF/CNPJ do destinatário (opcional)</label><input id="doc_dest" inputmode="numeric" maxlength="18" placeholder="usado nas cotações online; sem ele, cota pelo CEP">
 <h2 style="margin-top:18px">Carga</h2>
 <div class="row2">
 <div><label>Peso real (kg)</label><input id="peso" type="number" value="150" min="0" step="0.1"></div>
@@ -46,11 +70,6 @@
 <div><label>Alt. (m)</label><input id="a" type="number" value="0.55" step="0.01"></div>
 </div>
 <label>Qtd. de volumes com essas dimensões</label><input id="qv" type="number" value="1" min="1">
-<div id="bp_cfg" class="hide">
-<h2 style="margin-top:18px">Braspress online</h2>
-<label>Remetente</label><select id="bp_rem"></select>
-<label>CPF/CNPJ do destinatário (opcional)</label><input id="bp_dest" inputmode="numeric" maxlength="18" placeholder="sem ele, a Braspress cota só pelo CEP">
-</div>
 <h2 style="margin-top:18px">Regras</h2>
 <label>Coluna "Tonelada" (Trânsito Brasil, TJB)</label>
 <div class="mode" id="tonmode"><button data-m="exc" class="on">Excedente sobre última faixa</button><button data-m="tot">Peso total (mín. última faixa)</button></div>
@@ -93,7 +112,7 @@
 
 <section id="ped" class="hide">
 <div class="card">
-<div class="subnav" id="b_sub"><button data-r="pedidos" class="on">Pedidos</button><button data-r="propostas">Propostas</button><button data-r="notas">Notas fiscais</button><button data-r="produtos">Produtos</button></div>
+<div class="subnav hide" id="b_sub"><button data-r="pedidos" class="on">Pedidos</button><button data-r="propostas">Propostas</button><button data-r="notas">Notas fiscais</button><button data-r="produtos">Produtos</button></div>
 <div class="hist-top">
 <input id="p_busca" placeholder="Buscar" style="max-width:340px">
 <select id="p_canal" style="max-width:190px">
@@ -118,11 +137,36 @@
 <div class="hist-top"><h2 style="margin:0">Cotações salvas</h2>
 <input id="h_busca" placeholder="Buscar por cidade, cliente, pedido, usuário, transportadora ou CEP" style="max-width:460px">
 <label class="chk" style="margin:0"><input type="checkbox" id="h_manual"> Só com valor manual</label>
-<button class="btn" id="h_atualizar">Atualizar</button><button class="btn btn2" id="h_analise">Análise de divergências</button></div>
+<button class="btn" id="h_atualizar">Atualizar</button></div>
 <div class="small" id="h_status" style="margin:10px 0"></div>
 <div class="tbl-wrap"><table id="h_tab"></table></div>
 <div id="h_det"></div>
+</div>
+</section>
+
+<section id="div" class="hide">
 <div id="h_div"></div>
+</section>
+
+<section id="integ" class="hide">
+<p class="small" id="i_rem"></p>
+<div id="i_lista" class="integ-grid"></div>
+<div class="card" style="margin-top:16px">
+<h2>Como incluir uma transportadora</h2>
+<p class="small"><b>Transportadoras que usam o sistema SSW</b> (como a Expresso Leomar): peça a ela o <i>domínio</i>, o <i>login</i> e a <i>senha</i> do web service de cotação e acrescente uma entrada no secret <code>SSW_TRANSPORTADORAS</code> do Cloudflare (Workers &amp; Pages → gestaofrete → Settings → Variables and secrets, tipo Secret):</p>
+<pre class="cod">[{"transportadora":"Expresso Leomar","dominio":"…","login":"…","senha":"…","cnpjPagador":"12995553000100"}]</pre>
+<p class="small">Para mais de uma transportadora SSW, inclua uma entrada por transportadora na mesma lista. <b>Outras transportadoras com API própria</b> (como a Braspress): envie a documentação e as credenciais de teste para criarmos o conector.</p>
+</div>
+</section>
+
+<section id="cfg" class="hide">
+<div class="card" style="max-width:640px">
+<h2>Empresa remetente</h2>
+<p class="small">CNPJ e CEP de origem usados nas cotações online. Os CNPJs da lista são os que constam nas credenciais das transportadoras.</p>
+<label>CNPJ remetente</label><select id="c_cnpj"></select>
+<label>CEP de origem</label><input id="c_cep" inputmode="numeric" maxlength="9">
+<p class="small" id="c_info"></p>
+<button class="btn" id="c_salvar">Salvar</button> <span class="small" id="c_status"></span>
 </div>
 </section>
 
@@ -135,6 +179,8 @@
 </div>
 </section>
 </main>
+</div>
+<div id="veu"></div>
 <script src="js/app.js"></script>
 </body>
 </html>

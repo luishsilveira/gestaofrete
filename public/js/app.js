@@ -28,7 +28,7 @@ const K=s=>norm(String(s)).replace(/[^A-Z0-9]+/g,' ').trim();
 const IDX={};
 [['tb',D.tbmap],['tjb',D.tjmap],['sm',D.smmap],['rte',D.rtemap]].forEach(([k,l])=>{ const m=new Map(); l.forEach(x=>{ const key=K(x[0])+'|'+x[1]; if(!m.has(key)) m.set(key,x); }); IDX[k]=m; });
 const TXCID=new Map(Object.entries(D.txcid).map(([k,v])=>{ const [c,u]=k.split('|'); return [K(c)+'|'+u,v]; }));
-let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='1.6';
+let tonMode='exc'; let override={}; let ULT=null; let API_OK=false; let BLING_PED=null; let BLING_SYNC=null; const VERSAO='2.0';
 $('subt').textContent=`Origem Nova Santa Rita/RS · carga fracionada · ${TABELAS.length} tabelas carregadas`;
 
 // índice de cidades (união das listas)
@@ -203,24 +203,28 @@ function calc(){
     const r=t.rotas[rv.i];
     if(t.id==='tjb') op.int=/interior/i.test(r.regiao);
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
-  const bpReq=BP.contas?reqBraspress(peso,nf,m3):null, bpChave=bpReq?JSON.stringify(bpReq):null;
-  // Braspress: vale a cotação online; a tabela só entra quando a API não responde (as duas ficam registradas).
-  if(bpReq){ const ib=res.findIndex(r=>r.t.id==='bp'), tb=ib>=0?res[ib]:null, x=BP.res&&BP.res.chave===bpChave?BP.res:null;
-    if(x&&x.ok){
-      const on={t:tb?tb.t:TABELAS.find(t=>t.id==='bp')||{id:'bp',transportadora:'Braspress'},r:{regiao:'cotação online',prazo:x.prazo},
-        rv:{prazo:x.prazo,txt:'API Braspress',fonte:'api'},pT:pt,total:x.totalFrete,sub:x.totalFrete,icms:0,al:0,api:true,
-        bp:{fonte:'online',online:x.totalFrete,tabela:tb?+tb.total.toFixed(2):null,praca_tabela:tb?tb.r.regiao:null,id:x.id||null,prazo:x.prazo,erro:null},
-        it:[{n:'Frete total informado pela Braspress',d:`cotação nº ${x.id||'—'} · válida até 23:59 de hoje${x.remetente?' · remetente '+x.remetente:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:x.totalFrete}].concat(
-          tb?[{n:'Diferença para a tabela Braspress (só informativo)',d:`pela tabela: ${brl(tb.total)} (praça ${tb.r.regiao})`,v:x.totalFrete-tb.total}]:[])};
-      if(ib>=0) res.splice(ib,1,on); else { res.push(on); const k=nao.findIndex(n=>n.t.id==='bp'); if(k>=0) nao.splice(k,1); }
-    } else if(tb){
-      const erro=x&&!x.ok?x.erro:(BP.pend===bpChave?'consulta online em andamento':'sem resposta da API');
-      tb.bp={fonte:'tabela',online:null,tabela:+tb.total.toFixed(2),praca_tabela:tb.r.regiao,id:null,prazo:null,erro};
+  // Cotação online: vale o valor da API; a tabela só entra quando a API não responde (as duas ficam registradas).
+  const onReq=ONL.integ.length?reqOnline(peso,nf,m3):null, onChave=onReq?JSON.stringify(onReq):null;
+  if(onReq){ const x=ONL.res&&ONL.res.chave===onChave?ONL.res:null, pend=ONL.pend===onChave;
+    for(const ig of ONL.integ){
+      const ib=ig.tabela?res.findIndex(r=>r.t.id===ig.tabela):-1, tb=ib>=0?res[ib]:null;
+      const o=x&&x.ok?x.resultados.find(r=>r.integracao===ig.id):null;
+      if(o&&o.ok){
+        const on={t:tb?tb.t:(TABELAS.find(t=>t.id===ig.tabela)||{id:'api-'+ig.id,transportadora:o.transportadora}),r:{regiao:'cotação online',prazo:o.prazo},
+          rv:{prazo:o.prazo,txt:'online',fonte:'api'},pT:pt,total:o.total,sub:o.total,icms:0,al:0,api:true,
+          on:{fonte:'online',online:o.total,tabela:tb?+tb.total.toFixed(2):null,praca_tabela:tb?tb.r.regiao:null,id:o.id||null,prazo:o.prazo,erro:null},
+          it:[{n:`Frete total informado pela ${o.transportadora}`,d:`cotação nº ${o.id||'—'} · válida no dia${x.remetente&&x.remetente.nome?' · remetente '+x.remetente.nome:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:o.total}].concat(
+            tb?[{n:'Diferença para a tabela (só informativo)',d:`pela tabela: ${brl(tb.total)} (praça ${tb.r.regiao})`,v:o.total-tb.total}]:[])};
+        if(ib>=0) res.splice(ib,1,on); else { res.push(on); const k=nao.findIndex(n=>n.t.id===ig.tabela); if(k>=0) nao.splice(k,1); }
+      } else if(tb){
+        const erro=o?o.erro:(x&&!x.ok?x.erro:(pend?'consulta online em andamento':'sem resposta da API'));
+        tb.on={fonte:'tabela',online:null,tabela:+tb.total.toFixed(2),praca_tabela:tb.r.regiao,id:null,prazo:null,erro};
+      }
     }
   }
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
-  if(bpReq) agendarBraspress(bpReq,bpChave);
+  if(onReq) agendarOnline(onReq,onChave);
   $('salvar').classList.toggle('hide',!res.length||!API_OK);
   { const sel=$('s_transp'), ant=sel.value;
     sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
@@ -232,18 +236,18 @@ function calc(){
   if(simples){
     let h=res.map((x,k)=>{ const prazo=x.rv.prazo||x.r.prazo;
       return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">valor oficial da Braspress (API)</span>${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:x.t.id==='bp'?`<span>pela tabela · ${x.bp&&x.bp.erro==='consulta online em andamento'?'consultando a Braspress…':'cotação online indisponível'}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`:x.rv.fonte==='man'?`<span>praça ${x.r.regiao} a confirmar</span>`:''}</div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?' consultando online…':' online indisponível'):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
     if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>n.t.transportadora).join(', ')}</div>`;
-    $('out').innerHTML=h+bpStatus(bpChave); return;
+    $('out').innerHTML=h+onStatus(onChave); return;
   }
   let h=res.map((x,k)=>{
     const dif=k?` <small>+${brl(x.total-res[0].total)} (${((x.total/res[0].total-1)*100).toFixed(1)}%)</small>`:'<small>menor preço</small>';
     const prazo=x.rv.prazo||x.r.prazo;
     const bcls={lista:'b-lista',cap:'b-cap',man:'b-man',api:'b-api'}[x.rv.fonte];
-    const bpNota=x.bp&&x.bp.fonte==='tabela'?` · <span class="aviso">cotação online indisponível: ${esc(x.bp.erro)}</span>`:'';
+    const bpNota=x.on&&x.on.fonte==='tabela'?` · <span class="aviso">${x.on.erro==='consulta online em andamento'?'consultando online…':'cotação online indisponível: '+esc(x.on.erro)}</span>`:'';
     return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
       <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}${bpNota}</span></div>
       <div class="val">${brl(x.total)}${dif}</div></div>
@@ -256,7 +260,7 @@ function calc(){
       <tr class="tot"><td>Total</td><td></td><td class="n">${brl(x.total)}</td></tr></table></div></div>`;}).join('');
   if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
   if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>`<b>${n.t.transportadora}</b> – ${n.msg}`).join('<br>')}</div>`;
-  $('out').innerHTML=h+bpStatus(bpChave);
+  $('out').innerHTML=h+onStatus(onChave);
   $('out').querySelectorAll('.rh').forEach(e=>e.onclick=()=>e.parentNode.classList.toggle('open'));
   $('out').querySelectorAll('.det select').forEach(s=>{ s.onclick=e=>e.stopPropagation(); s.onchange=()=>{override[s.dataset.t]=+s.value;calc();}; });
   const b=$('out').querySelector('.r'); if(b) b.classList.add('open');
@@ -269,41 +273,106 @@ function calc(){
 }
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
-['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','bp_rem','bp_dest'].forEach(id=>$(id).addEventListener('input',calc));
+['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','doc_dest'].forEach(id=>$(id).addEventListener('input',calc));
 
-// ---------- Braspress: cotação online ----------
-const BP={contas:null,res:null,pend:null,timer:null};
-function reqBraspress(peso,nf,m3){
+// ---------- Cotação online nas transportadoras (API) ----------
+const ONL={integ:[],res:null,pend:null,timer:null};
+function reqOnline(peso,nf,m3){
   const cep=String(dest.cep||'').replace(/\D/g,'').padStart(8,'0');
   if(!dest.cep||cep.length!==8||!(peso>0)||!(nf>0)) return null;
   const c=+$('c').value, l=+$('l').value, a=+$('a').value, qv=+$('qv').value||1;
   return {cepDestino:cep,peso,vlrMercadoria:nf,volumes:qv,m3:(c*l*a>0)?null:m3,
-    cubagem:c*l*a>0?[{comprimento:c,largura:l,altura:a,volumes:qv}]:[],cnpjRemetente:$('bp_rem').value,cnpjDestinatario:$('bp_dest').value.replace(/\D/g,'')};
+    cubagem:c*l*a>0?[{comprimento:c,largura:l,altura:a,volumes:qv}]:[],cnpjDestinatario:$('doc_dest').value.replace(/\D/g,'')};
 }
-function agendarBraspress(req,chave){
-  if((BP.res&&BP.res.chave===chave)||BP.pend===chave) return;
-  clearTimeout(BP.timer); BP.pend=chave;
-  BP.timer=setTimeout(async()=>{
+function agendarOnline(req,chave){
+  if((ONL.res&&ONL.res.chave===chave)||ONL.pend===chave) return;
+  clearTimeout(ONL.timer); ONL.pend=chave;
+  ONL.timer=setTimeout(async()=>{
     let r;
-    try{ r={...await api('/api/braspress/cotar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(req)}),ok:true}; }
+    try{ r={...await api('/api/online/cotar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(req)}),ok:true}; }
     catch(e){ r={ok:false,erro:e.message}; }
-    if(BP.pend!==chave) return;
-    BP.pend=null; BP.res={...r,chave}; calc();
+    if(ONL.pend!==chave) return;
+    ONL.pend=null; ONL.res={...r,chave}; calc();
   },900);
 }
-function bpStatus(chave){
-  if(!BP.contas||!chave) return '';
-  if(BP.res&&BP.res.chave===chave&&!BP.res.ok) return `<div class="na"><b>Braspress online</b> – ${esc(BP.res.erro)} Valor da Braspress pela tabela.</div>`;
-  return '';
+function onStatus(chave){
+  if(!ONL.integ.length||!chave) return '';
+  const x=ONL.res&&ONL.res.chave===chave?ONL.res:null; if(!x) return '';
+  if(!x.ok) return `<div class="na"><b>Cotação online</b> – ${esc(x.erro)} Valores pela tabela.</div>`;
+  const f=x.resultados.filter(r=>!r.ok);
+  return f.length?`<div class="na"><b>Cotação online indisponível</b> – ${f.map(r=>`${esc(r.transportadora)}: ${esc(r.erro)}`).join('<br>')}</div>`:'';
 }
-async function iniciarBraspress(){
-  try{ const s=await api('/api/braspress/status'); if(!s.configurado||!s.contas.length) return;
-    BP.contas=s.contas;
-    $('bp_rem').innerHTML=s.contas.map(c=>`<option value="${c.cnpj}" ${c.padrao?'selected':''}>${esc(c.razao_social||'CNPJ')} – ${c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}${c.cidade?' ('+esc(c.cidade)+'/'+esc(c.uf)+')':''}${c.cepOrigemPresumido?' – origem '+fmtCep(+c.cepOrigem)+' (presumida)':''}</option>`).join('');
-    $('bp_cfg').classList.remove('hide'); calc();
-  }catch(e){ /* sem API */ }
+async function iniciarOnline(){
+  try{ const s=await api('/api/online/status'); ONL.integ=s.integracoes.filter(i=>i.ativa); if(ONL.integ.length) calc(); }catch(e){ /* sem API */ }
 }
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['calc','tab','ped','hist','json'].forEach(s=>$(s).classList.toggle('hide',s!==b.dataset.t)); if(b.dataset.t==='hist') carregarHistorico(); if(b.dataset.t==='ped') mudarRecurso(REC);});
+
+// ---------- Navegação (menu lateral) ----------
+const TITULOS={calc:'Calcular frete','bling-pedidos':'Bling · Pedidos','bling-propostas':'Bling · Propostas','bling-notas':'Bling · Notas fiscais','bling-produtos':'Bling · Produtos',
+  hist:'Histórico de cotações',div:'Divergências',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
+const SECOES=['calc','tab','ped','hist','div','integ','cfg','json'];
+function irPara(p,carregar=true){
+  if(!TITULOS[p]) p='calc';
+  const sec=p.startsWith('bling-')?'ped':p;
+  SECOES.forEach(x=>$(x).classList.toggle('hide',x!==sec));
+  document.querySelectorAll('#menu a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
+  $('titulo').textContent=TITULOS[p]; document.body.classList.remove('menu-aberto');
+  if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
+  if(!carregar) return;
+  if(sec==='ped') mudarRecurso(p.slice(6)); else if(p==='hist') carregarHistorico(); else if(p==='div') analiseDivergencias();
+  else if(p==='integ') carregarIntegracoes(); else if(p==='cfg') carregarConfig();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('#menu a').forEach(a=>a.onclick=e=>{ e.preventDefault(); irPara(a.dataset.p); });
+window.addEventListener('hashchange',()=>irPara(location.hash.slice(1)));
+$('abrir_menu').onclick=()=>document.body.classList.add('menu-aberto'); $('veu').onclick=()=>document.body.classList.remove('menu-aberto');
+const fmtCnpj=c=>String(c||'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+
+// ---------- Integrações ----------
+async function carregarIntegracoes(){
+  $('i_lista').innerHTML='<div class="small">Carregando…</div>';
+  try{ const s=await api('/api/online/status'); const rm=s.remetente||{};
+    $('i_rem').innerHTML=`Cotações online saem em nome de <b>${esc(rm.nome||fmtCnpj(rm.cnpj)||'—')}</b>${rm.cnpj?' ('+fmtCnpj(rm.cnpj)+')':''}, origem CEP ${fmtCep(+rm.cep||0)}${rm.cepPresumido?' (presumido)':''}. <a href="#cfg">Alterar</a>`;
+    $('i_lista').innerHTML=s.integracoes.map(i=>{
+      const pill=!i.configurada?(i.erroConfig?'<span class="pill err">erro na configuração</span>':'<span class="pill off">não configurada</span>'):i.ativa?'<span class="pill ok">ativa</span>':'<span class="pill off">desativada</span>';
+      const tipo=i.tipo==='ssw'?'Web service SSW':i.tipo==='braspress'?'API própria da Braspress':esc(i.tipo);
+      const tab=i.tabela?(TABELAS.find(t=>t.id===i.tabela)||{}).transportadora:null;
+      if(!i.configurada) return `<div class="integ"><h3>${esc(i.transportadora||(i.tipo==='ssw'?'Transportadoras SSW':i.tipo))}${pill}</h3><div class="tp">${tipo}</div>
+        <p class="small">${i.erroConfig?esc(i.erroConfig):i.tipo==='ssw'?'Nenhuma transportadora SSW cadastrada. Veja abaixo como incluir.':'Sem credenciais no Cloudflare.'}</p></div>`;
+      const u=i.ultima;
+      return `<div class="integ"><h3>${esc(i.transportadora)}${pill}</h3><div class="tp">${tipo}${tab?' · compara com a tabela '+esc(tab):' · sem tabela própria'}</div>
+        <dl><dt>Consultas (30 dias)</dt><dd>${i.consultas30}${i.consultas30?` · ${Math.round(i.sucesso30/i.consultas30*100)}% com sucesso`:''}</dd>
+        <dt>Tempo médio</dt><dd>${i.msMedio!=null?(i.msMedio/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' s':'—'}</dd>
+        <dt>Última consulta</dt><dd>${u?`${horaBR(u.em)}${u.teste?' (teste)':''} · ${u.ok?'<span class="ok">ok</span>':'<span class="err">'+esc(u.erro)+'</span>'}`:'—'}</dd></dl>
+        <div class="acoes"><label class="chk" style="margin:0"><input type="checkbox" data-ativa="${esc(i.id)}" ${i.ativa?'checked':''}> Usar cotação online</label>
+        <button class="btn btn2 btn-mini" data-testar="${esc(i.id)}">Testar conexão</button></div><div class="teste small" id="t_${esc(i.id)}"></div></div>`; }).join('');
+    $('i_lista').querySelectorAll('[data-ativa]').forEach(c=>c.onchange=async()=>{ c.disabled=true;
+      try{ await api('/api/online/ativar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:c.dataset.ativa,ativa:c.checked})}); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+      catch(e){ alert('Erro: '+e.message); c.disabled=false; } });
+    $('i_lista').querySelectorAll('[data-testar]').forEach(b=>b.onclick=async()=>{ const el=$('t_'+b.dataset.testar); b.disabled=true; el.textContent='Consultando (São Paulo/SP, 50 kg, NF R$ 1.000)…';
+      try{ const r=await api('/api/online/testar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:b.dataset.testar})});
+        el.innerHTML=r.ok?`<span class="ok">Conexão ok</span>: ${brl(r.total)}${r.prazo?' · '+fp(r.prazo):''}${r.id?' · cotação nº '+esc(r.id):''} (${(r.ms/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})} s)`:`<span class="err">Falhou</span>: ${esc(r.erro)}`; }
+      catch(e){ el.innerHTML='<span class="err">'+esc(e.message)+'</span>'; } finally{ b.disabled=false; } });
+  }catch(e){ $('i_lista').innerHTML='<div class="small err">Erro: '+esc(e.message)+'</div>'; }
+}
+
+// ---------- Configurações: empresa remetente ----------
+async function carregarConfig(){
+  $('c_status').textContent='';
+  try{ const c=await api('/api/config'); preencherConfig(c); }catch(e){ $('c_info').innerHTML='<span class="err">'+esc(e.message)+'</span>'; }
+}
+function preencherConfig(c){
+  const L=c.remetentes||[], rm=c.remetente||{};
+  $('c_cnpj').innerHTML=L.length?L.map(x=>`<option value="${x.cnpj}" ${x.cnpj===rm.cnpj?'selected':''}>${esc(x.nome||'CNPJ')} – ${fmtCnpj(x.cnpj)}${x.cidade?' ('+esc(x.cidade)+'/'+esc(x.uf)+')':''}</option>`).join(''):'<option value="">Nenhum CNPJ nas credenciais das transportadoras</option>';
+  $('c_cep').value=c.cfg&&c.cfg.cep?fmtCep(+c.cfg.cep):'';
+  const sel=()=>L.find(x=>x.cnpj===$('c_cnpj').value)||{};
+  const info=()=>{ const x=sel(); $('c_cep').placeholder=x.cep?fmtCep(+x.cep)+' (do cadastro do CNPJ)':'92480-000';
+    $('c_info').innerHTML=`Em uso: <b>${esc(rm.nome||'—')}</b>, origem ${fmtCep(+rm.cep||0)}${rm.cepPresumido?' (presumida: o cadastro do CNPJ não foi encontrado)':''}${rm.configurado?'':' · escolhido automaticamente (CNPJ de Nova Santa Rita)'}. Deixe o CEP em branco para usar o do cadastro do CNPJ.`; };
+  $('c_cnpj').onchange=info; info();
+}
+$('c_salvar').onclick=async()=>{ $('c_salvar').disabled=true;
+  try{ const c=await api('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cnpj:$('c_cnpj').value,cep:$('c_cep').value})});
+    preencherConfig(c); $('c_status').innerHTML='<span class="ok">Salvo.</span>'; ONL.res=null; calc(); }
+  catch(e){ $('c_status').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } finally{ $('c_salvar').disabled=false; } };
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
 function renderTab(){
@@ -344,7 +413,7 @@ const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
-api('/api/eu').then(j=>{ API_OK=true; $('subt').textContent+=` · usuário: ${j.usuario}`; calc(); iniciarBling(); iniciarBraspress(); })
+api('/api/eu').then(async j=>{ API_OK=true; $('usuario').textContent=j.usuario; calc(); await iniciarBling(); iniciarOnline(); const p=location.hash.slice(1); if(p&&p!=='calc') irPara(p); })
   .catch(()=>{ API_OK=false; });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
@@ -355,7 +424,7 @@ $('s_btn').onclick=async()=>{
     resultados:ULT.res.map(x=>({transportadora:x.t.transportadora,praca:x.r.regiao,fonte_praca:x.rv.txt,total:+x.total.toFixed(2),
       prazo:String(x.rv.prazo||x.r.prazo||''),peso_taxado:x.pT,subtotal:+x.sub.toFixed(2),icms:+x.icms.toFixed(2),
       itens:x.it.map(i=>({n:i.n,v:+i.v.toFixed(2),d:i.d})),
-      ...(x.bp?{fonte_valor:x.bp.fonte,valor_online:x.bp.online,valor_tabela:x.bp.tabela,praca_tabela:x.bp.praca_tabela,cotacao_online:x.bp.id,erro_online:x.bp.erro}:{})})),
+      ...(x.on?{fonte_valor:x.on.fonte,valor_online:x.on.online,valor_tabela:x.on.tabela,praca_tabela:x.on.praca_tabela,cotacao_online:x.on.id,erro_online:x.on.erro}:{})})),
     sem_cotacao:ULT.nao.map(n=>({transportadora:n.t.transportadora,motivo:n.msg}))};
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
@@ -446,7 +515,7 @@ async function iniciarBling(){
   if(q.get('bling')) history.replaceState(null,'',location.pathname);
   try{ const s=await api('/api/bling/status');
     if(!s.configurado) return;
-    $('bling').classList.remove('hide'); $('tab_ped').classList.remove('hide'); BLING_SYNC=s.sync;
+    $('bling').classList.remove('hide'); document.querySelectorAll('#menu .bl').forEach(e=>e.classList.remove('hide')); BLING_SYNC=s.sync;
     $('b_conectar').classList.toggle('hide',s.conectado);
     $('b_status').innerHTML=msg||(s.conectado?'':'Para buscar pedidos, conecte a calculadora ao Bling (só é preciso uma vez).');
   }catch(e){ /* sem API */ }
@@ -474,7 +543,7 @@ function preencherPedido(p){
     else if(p.pesoItens>0&&Math.abs(p.pesoItens-p.pesoBruto)>Math.max(1,p.pesoBruto*0.05)) avisos.push(`peso pelos itens é ${p.pesoItens.toLocaleString('pt-BR')} kg, diferente do peso do pedido`);
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;
-    $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero; $('bp_dest').value=p.documento||'';
+    $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero; $('doc_dest').value=p.documento||'';
     $('b_status').innerHTML=`<b>${{proposta:'Proposta',nota:'Nota fiscal'}[p.tipo]||'Pedido'} ${esc(p.numero)}</b>${p.tipo==='nota'&&p.transportadora?' · transportadora da NF: '+esc(p.transportadora):''}${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
       `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
       `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
@@ -588,7 +657,7 @@ async function detalheItens(tipoLista,x,tr){
   }catch(e){ $('p_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 function cotarDoc(r,p){
-  document.querySelector('nav button[data-t=calc]').click();
+  irPara('calc',false);
   const pesoPedido=+p.peso_bruto||0, pesoItens=+p.peso_calculado||0;
   preencherPedido({tipo:r==='propostas'?'proposta':'pedido',id:p.id,numero:p.numero,cliente:p.cliente,documento:p.documento,cep:p.cep,origemCep:p.origem_cep,
     pesoBruto:pesoPedido||pesoItens||null,origemPeso:pesoPedido?'pedido':pesoItens?'itens':'',pesoItens:pesoItens||null,
@@ -600,7 +669,7 @@ $('b_num').addEventListener('keydown',e=>{ if(e.key==='Enter') buscarPedidoBling
 
 let hTimer=null;
 $('h_busca').addEventListener('input',()=>{ clearTimeout(hTimer); hTimer=setTimeout(carregarHistorico,400); });
-$('h_atualizar').onclick=carregarHistorico; $('h_manual').onchange=carregarHistorico; $('h_analise').onclick=analiseDivergencias;
+$('h_atualizar').onclick=carregarHistorico; $('h_manual').onchange=carregarHistorico;
 async function carregarHistorico(){
   $('h_det').innerHTML=''; $('h_div').innerHTML='';
   if(!API_OK){ $('h_status').textContent='O histórico só funciona no site publicado (com login).'; $('h_tab').innerHTML=''; return; }
@@ -662,23 +731,22 @@ async function analiseDivergencias(){
         <td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_nf)}</td><td class="n">${brl(+m.valor_calculado)}</td><td class="n">${brl(+m.valor_manual)}</td>
         <td class="n">${difTxt(+m.valor_manual,+m.valor_calculado)}</td><td class="small">${esc(m.motivo||'')}</td><td class="small">${esc([m.referencia,m.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('')}</table></div>`
       :'<p class="small">Ainda não há valores manuais registrados. Registre no painel "Salvar cotação" ou no detalhe de uma cotação do histórico.</p>'}
-      ${d.braspress&&d.braspress.linhas.length?`<h3>Braspress: cotação online × tabela (${d.braspress.linhas.length} cotações salvas; valor online usado em ${d.braspress.fontes.online}, tabela por falha da API em ${d.braspress.fontes.tabela})</h3>
-        <p class="small">Diferença positiva = a Braspress (online) cobra mais do que a nossa tabela calcula.</p>
-        ${res('Por UF',d.braspress.por_uf.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}${res('Por UF e praça da tabela',d.braspress.por_praca.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}
-        <div class="tbl-wrap"><table class="mini"><tr><th>Data</th><th>Cotação</th><th>Destino</th><th>Praça (tabela)</th><th class="n">Peso</th><th class="n">NF</th><th class="n">Tabela</th><th class="n">Online</th><th class="n">Diferença</th><th>Nº Braspress</th></tr>
-        ${d.braspress.linhas.map(m=>`<tr class="lin" data-id="${m.cotacao_id}"><td>${dataBR(m.criado_em)}</td><td>${m.cotacao_id}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="small">${esc(m.praca||'')}</td>
+      ${d.online&&d.online.linhas.length?`<h3>Cotação online × tabela (${d.online.linhas.length} comparações em cotações salvas)</h3>
+        <p class="small">Diferença positiva = a transportadora (online) cobra mais do que a nossa tabela calcula. Uso do valor online × tabela por falha da API: ${d.online.fontes.map(f=>`${esc(f.transportadora)} ${f.online} × ${f.tabela}`).join(' · ')}.</p>
+        ${res('Por transportadora',d.online.por_transportadora.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}${res('Por transportadora e UF',d.online.por_uf.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}${res('Por transportadora, UF e praça da tabela',d.online.por_praca.map(g=>({...g,media_abs_pct:null,acima:'',abaixo:''})))}
+        <div class="tbl-wrap"><table class="mini"><tr><th>Data</th><th>Cotação</th><th>Transportadora</th><th>Destino</th><th>Praça (tabela)</th><th class="n">Peso</th><th class="n">NF</th><th class="n">Tabela</th><th class="n">Online</th><th class="n">Diferença</th><th>Nº cotação</th></tr>
+        ${d.online.linhas.map(m=>`<tr class="lin" data-id="${m.cotacao_id}"><td>${dataBR(m.criado_em)}</td><td>${m.cotacao_id}</td><td>${esc(m.transportadora||'')}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="small">${esc(m.praca||'')}</td>
           <td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_nf)}</td><td class="n">${brl(+m.tabela)}</td><td class="n">${brl(+m.online)}</td><td class="n">${difTxt(+m.online,+m.tabela)}</td><td class="small">${esc(m.cotacao_online||'')}</td></tr>`).join('')}</table></div>`:''}
       ${d.sem_calculo.length?`<h3>Transportadoras que o sistema não cotou (${d.sem_calculo.length})</h3><table class="mini"><tr><th>Data</th><th>Transportadora</th><th>Destino</th><th class="n">Peso</th><th class="n">Informado</th><th>Obs.</th></tr>`+
         d.sem_calculo.map(m=>`<tr><td>${dataBR(m.criado_em)}</td><td>${esc(m.transportadora)}</td><td>${esc(m.cidade||'')}/${esc(m.uf||'')}</td><td class="n">${kg(m.peso_real)}</td><td class="n">${brl(+m.valor_manual)}</td><td class="small">${esc(m.observacao||'')}</td></tr>`).join('')+'</table>':''}</div>`;
-    $('h_div').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{ $('h_div').innerHTML=''; $('h_det').innerHTML=''; detalheHistorico(tr.dataset.id); });
+    $('h_div').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{ irPara('hist'); detalheHistorico(tr.dataset.id); });
     const b=$('d_csv'); if(b) b.onclick=()=>{
       const cols=['cotacao_id','criado_em','usuario','transportadora','cidade','uf','cep','praca','peso_real','peso_taxado','valor_nf','volumes','com_icms','valor_calculado','valor_manual','diferenca','diferenca_pct','prazo_manual','motivo','referencia','observacao','cliente','pedido'];
       const cel=v=>{ v=v==null?'':String(v); if(/^-?\d+(\.\d+)?$/.test(v)) v=v.replace('.',','); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
       const csv='﻿'+cols.join(';')+'\n'+L.map(m=>cols.map(c=>cel(m[c])).join(';')).join('\n');
       const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='divergencias-frete.csv'; a.click(); };
-    $('h_div').scrollIntoView({behavior:'smooth'});
   }catch(e){ $('h_div').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 
-renderTab(); setDest({uf:'SP',cidade:'CAMPINAS'});
+renderTab(); setDest({uf:'SP',cidade:'CAMPINAS'}); irPara(location.hash.slice(1)||'calc',false);
 }

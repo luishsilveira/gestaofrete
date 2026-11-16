@@ -6,7 +6,7 @@
 
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
-import { SCHEMA_BRASPRESS, BraspressErro, contasBraspress, infoContas, cotarBraspress } from './braspress.js';
+import { SCHEMA_ONLINE, MIGRAR_ONLINE, cotarOnline, testarIntegracao, statusIntegracoes, ativarIntegracao, configuracao, salvarConfiguracao } from './online.js';
 import { SCHEMA_DOCS, buscarPedido, buscarProposta, buscarNota, completarProdutos, gravarPedidos, gravarPropostas, gravarNotas, sincronizarTudo } from './sync.js';
 
 const SCHEMA = `
@@ -78,7 +78,8 @@ async function comBanco(env, ctx, fn) {
       await client.query(SCHEMA_BLING);
       await client.query(SCHEMA_DOCS);
       await client.query(SCHEMA_MANUAL);
-      await client.query(SCHEMA_BRASPRESS);
+      await client.query(SCHEMA_ONLINE);
+      await client.query(MIGRAR_ONLINE);
       esquemaPronto = true;
     }
     return await fn(client);
@@ -210,8 +211,8 @@ async function divergencias(url, env, ctx) {
     db.query(resumo(`COALESCE(motivo, 'Sem motivo informado')`), params),
     db.query(`SELECT m.*, c.criado_em AS cotado_em, c.cidade, c.uf, c.peso_real, c.valor_nf FROM cotacao_valores_manuais m
                 JOIN cotacoes c ON c.id = m.cotacao_id WHERE m.valor_calculado IS NULL ORDER BY m.criado_em DESC LIMIT 500`),
-    // Braspress: valor online (API) × tabela, gravados juntos em cada cotação salva
-    db.query(`SELECT c.id AS cotacao_id, c.criado_em, c.cidade, c.uf, c.cep, c.peso_real, c.peso_taxado, c.valor_nf,
+    // Cotação online (API) × tabela, gravadas juntas em cada cotação salva
+    db.query(`SELECT c.id AS cotacao_id, c.criado_em, r->>'transportadora' AS transportadora, c.cidade, c.uf, c.cep, c.peso_real, c.peso_taxado, c.valor_nf,
                      r->>'praca_tabela' AS praca, (r->>'valor_tabela')::numeric AS tabela, (r->>'valor_online')::numeric AS online,
                      r->>'cotacao_online' AS cotacao_online, r->>'prazo' AS prazo,
                      (r->>'valor_online')::numeric - (r->>'valor_tabela')::numeric AS diferenca,
@@ -219,8 +220,9 @@ async function divergencias(url, env, ctx) {
                 FROM cotacoes c CROSS JOIN LATERAL jsonb_array_elements(c.resultados) r
                WHERE r->>'valor_online' IS NOT NULL AND r->>'valor_tabela' IS NOT NULL
                ORDER BY c.criado_em DESC LIMIT 2000`),
-    db.query(`SELECT COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'online') AS online, COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'tabela') AS tabela
-                FROM cotacoes c CROSS JOIN LATERAL jsonb_array_elements(c.resultados) r WHERE r ? 'fonte_valor'`),
+    db.query(`SELECT r->>'transportadora' AS transportadora, COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'online') AS online,
+                     COUNT(*) FILTER (WHERE r->>'fonte_valor' = 'tabela') AS tabela
+                FROM cotacoes c CROSS JOIN LATERAL jsonb_array_elements(c.resultados) r WHERE r ? 'fonte_valor' GROUP BY 1 ORDER BY 1`),
   ]));
   const bp = r[6].rows;
   const agrupar = (f) => Object.values(bp.reduce((a, x) => {
@@ -230,8 +232,9 @@ async function divergencias(url, env, ctx) {
     .sort((a, b) => b.n - a.n);
   return json({ linhas: r[0].rows, por_transportadora: r[1].rows, por_uf: r[2].rows, por_peso: r[3].rows, por_motivo: r[4].rows,
     sem_calculo: r[5].rows, motivos: MOTIVOS,
-    braspress: { linhas: bp, por_uf: agrupar((x) => x.uf || '—'), por_praca: agrupar((x) => `${x.uf || '—'} · ${x.praca || '—'}`),
-      fontes: r[7].rows[0] || { online: 0, tabela: 0 } } });
+    online: { linhas: bp, por_transportadora: agrupar((x) => x.transportadora || '—'),
+      por_uf: agrupar((x) => `${x.transportadora || '—'} · ${x.uf || '—'}`), por_praca: agrupar((x) => `${x.transportadora || '—'} · ${x.uf || '—'} · ${x.praca || '—'}`),
+      fontes: r[7].rows } });
 }
 
 async function listarCotacoes(url, env, ctx) {
@@ -519,20 +522,31 @@ export default {
       const mv = url.pathname.match(/^\/api\/manuais\/(\d+)$/);
       if (mv && (request.method === 'DELETE' || request.method === 'PATCH')) return await alterarManual(mv[1], request, env, ctx);
       if (url.pathname === '/api/divergencias' && request.method === 'GET') return await divergencias(url, env, ctx);
-      if (url.pathname === '/api/braspress/status') {
-        if (!contasBraspress(env).length) return json({ configurado: false });
-        const contas = await comBanco(env, ctx, (db) => infoContas(env, db));
-        return json({ configurado: true, contas: contas.map(({ usuario, senha, ...c }) => c) });
+      // cotação online nas transportadoras (src/online.js e src/apis/)
+      const corpoJson = async () => { try { return await request.json(); } catch { throw Object.assign(new Error('Corpo da requisição inválido.'), { status: 400 }); } };
+      if (url.pathname === '/api/online/cotar' && request.method === 'POST') {
+        const d = await corpoJson();
+        return json(await comBanco(env, ctx, (db) => cotarOnline(env, db, d, usuario)));
       }
-      if (url.pathname === '/api/braspress/cotar' && request.method === 'POST') {
-        let d; try { d = await request.json(); } catch { return json({ erro: 'Corpo da requisição inválido.' }, 400); }
-        return json(await comBanco(env, ctx, (db) => cotarBraspress(env, db, d, usuario)));
+      if (url.pathname === '/api/online/status') return json(await comBanco(env, ctx, (db) => statusIntegracoes(env, db)));
+      if (url.pathname === '/api/online/ativar' && request.method === 'POST') {
+        const d = await corpoJson();
+        await comBanco(env, ctx, (db) => ativarIntegracao(env, db, String(d.id || ''), d.ativa, usuario));
+        return json({ ok: true });
+      }
+      if (url.pathname === '/api/online/testar' && request.method === 'POST') {
+        const d = await corpoJson();
+        return json(await comBanco(env, ctx, (db) => testarIntegracao(env, db, String(d.id || ''), usuario)));
+      }
+      if (url.pathname === '/api/config') {
+        if (request.method === 'POST') { const d = await corpoJson(); await comBanco(env, ctx, (db) => salvarConfiguracao(db, d, usuario)); }
+        return json(await comBanco(env, ctx, (db) => configuracao(env, db)));
       }
       if (url.pathname === '/api/motivos') return json({ motivos: MOTIVOS });
       return json({ erro: 'Rota não encontrada.' }, 404);
     } catch (e) {
       if (e instanceof BlingErro) return json({ erro: e.message, codigo: e.codigo }, e.status);
-      if (e instanceof BraspressErro) return json({ erro: e.message }, e.status === 401 ? 502 : e.status);
+      if (e.status >= 400 && e.status < 500) return json({ erro: e.message }, e.status);
       console.error('Erro na API', url.pathname, e);
       return json({ erro: 'Erro ao acessar o banco de dados.', detalhe: String(e && e.message || e) }, 500);
     }
