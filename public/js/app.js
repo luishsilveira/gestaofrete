@@ -422,20 +422,25 @@ function desenharMkt(){
 }
 async function carregarFixos(){
   $('m_fixos').innerHTML='<span class="small">Carregando…</span>';
-  try{ const j=await api('/api/marketplace/fixos'); let L=j.fixos.map(f=>({codigo:f.codigo,valor:f.valor,nome:f.nome}));
-    const desenhar=()=>{ $('m_fixos').innerHTML=`<h2>Itens com valor fixo</h2><p class="small">Componentes que recebem um valor fixo por unidade em vez de entrar no rateio pelo peso (ex.: lacre a R$ 0,18). Informe o código do produto no Bling.</p>
-      <table class="mini" style="max-width:640px"><tr><th>Código</th><th>Produto</th><th class="n">Valor por unidade (R$)</th><th></th></tr>
-      ${L.map((f,i)=>`<tr><td><input data-c="${i}" value="${esc(f.codigo)}"></td><td class="small">${esc(f.nome||'')}</td><td><input data-v="${i}" value="${String(f.valor).replace('.',',')}" inputmode="decimal" style="text-align:right"></td><td><a href="#" class="small" data-r="${i}">remover</a></td></tr>`).join('')}</table>
+  try{ const j=await api('/api/marketplace/fixos');
+    const conv=f=>({termo:f.termo??f.codigo??'',valor:f.valor,produtos:f.produtos||(f.produto_id?[{id:f.produto_id,codigo:f.codigo,nome:f.nome}]:null)});
+    let L=j.fixos.map(conv), salvo=true;
+    const achados=f=>f.produtos==null?'<span class="small">(salve para localizar)</span>':!f.produtos.length?'<span class="small aviso">nenhum produto encontrado</span>':
+      `<span class="small">${f.produtos.length} produto(s): ${f.produtos.slice(0,4).map(p=>esc((p.codigo?p.codigo+' – ':'')+p.nome)).join('; ')}${f.produtos.length>4?'…':''}</span>`;
+    const desenhar=()=>{ $('m_fixos').innerHTML=`<h2>Itens com valor fixo</h2><p class="small">Componentes que recebem um valor fixo por unidade em vez de entrar no rateio pelo peso (ex.: lacre a R$ 0,18). Informe o <b>código</b> do produto no Bling ou <b>parte do nome</b> (ex.: "KIT LACRE FRONTEC" pega todas as variações).</p>
+      <table class="mini" style="max-width:820px"><tr><th>Código ou nome</th><th class="n">Valor por unidade (R$)</th><th>Produtos encontrados</th><th></th></tr>
+      ${L.map((f,i)=>`<tr><td><input data-c="${i}" value="${esc(f.termo)}" style="min-width:220px"></td><td><input data-v="${i}" value="${String(f.valor).replace('.',',')}" inputmode="decimal" style="text-align:right;max-width:110px"></td><td>${achados(f)}</td><td><a href="#" class="small" data-r="${i}">remover</a></td></tr>`).join('')}</table>
       <div class="acoes" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn btn2 btn-mini" id="mf_add">Adicionar</button>
-      ${j.sugestoes.filter(x=>!L.some(f=>f.codigo===x.codigo)).map(x=>`<button class="btn btn2 btn-mini" data-sug="${esc(x.codigo)}">+ ${esc(x.codigo)} – ${esc(x.nome)} a R$ 0,18</button>`).join('')}
+      ${j.sugestoes.filter(x=>!L.some(f=>f.termo===x.termo||(f.produtos||[]).some(p=>String(p.id)===x.id))).map((x,k)=>`<button class="btn btn2 btn-mini" data-sug="${k}">+ ${esc(x.nome)} a R$ 0,18</button>`).join('')}
       <button class="btn" id="mf_salvar">Salvar e recalcular</button><span class="small" id="mf_st"></span></div>`;
-      $('m_fixos').querySelectorAll('[data-c]').forEach(e=>e.oninput=()=>L[+e.dataset.c].codigo=e.value.trim());
+      $('m_fixos').querySelectorAll('[data-c]').forEach(e=>e.oninput=()=>{ L[+e.dataset.c].termo=e.value.trim(); L[+e.dataset.c].produtos=null; });
       $('m_fixos').querySelectorAll('[data-v]').forEach(e=>e.oninput=()=>L[+e.dataset.v].valor=e.value);
       $('m_fixos').querySelectorAll('[data-r]').forEach(e=>e.onclick=ev=>{ ev.preventDefault(); L.splice(+e.dataset.r,1); desenhar(); });
-      $('m_fixos').querySelectorAll('[data-sug]').forEach(e=>e.onclick=()=>{ const x=j.sugestoes.find(s=>s.codigo===e.dataset.sug); L.push({codigo:x.codigo,nome:x.nome,valor:'0,18'}); desenhar(); });
-      $('mf_add').onclick=()=>{ L.push({codigo:'',valor:''}); desenhar(); };
-      $('mf_salvar').onclick=async()=>{ try{ const r=await api('/api/marketplace/fixos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fixos:L})});
-        L=r.fixos.map(f=>({codigo:f.codigo,valor:f.valor,nome:f.nome})); desenhar(); $('mf_st').innerHTML=r.fixos.some(f=>!f.nome)?'<span class="aviso">Salvo. Algum código não foi encontrado nos produtos importados.</span>':'<span class="ok">Salvo.</span>'; carregarMkt(); }
+      const sug=j.sugestoes.filter(x=>!L.some(f=>f.termo===x.termo||(f.produtos||[]).some(p=>String(p.id)===x.id)));
+      $('m_fixos').querySelectorAll('[data-sug]').forEach(e=>e.onclick=()=>{ const x=sug[+e.dataset.sug]; L.push({termo:x.termo,valor:'0,18',produtos:null}); desenhar(); });
+      $('mf_add').onclick=()=>{ L.push({termo:'',valor:'',produtos:null}); desenhar(); };
+      $('mf_salvar').onclick=async()=>{ try{ const r=await api('/api/marketplace/fixos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fixos:L.map(f=>({termo:f.termo,valor:f.valor}))})});
+        L=r.fixos.map(conv); desenhar(); $('mf_st').innerHTML=r.fixos.some(f=>!f.produtos.length)?'<span class="aviso">Salvo, mas algum código ou nome não foi encontrado nos produtos importados.</span>':'<span class="ok">Salvo.</span>'; carregarMkt(); }
         catch(e){ $('mf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
     };
     desenhar();

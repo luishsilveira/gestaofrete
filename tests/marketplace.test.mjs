@@ -30,9 +30,10 @@ t('só pedidos do Mercado Livre', r.j.resumo.pedidos === 3 && !r.j.pedidos.some(
 t('pedido 3552: mercadoria = 94 − 11,28 − 19,75 − 3,12 = 59,85', p102.base === 59.85 && p102.liquido === 62.97);
 t('sem valor fixo: tudo pelo peso', p102.componentes.every((c) => c.rateio === 'peso') && r.j.avisos.some((a) => /valor fixo/.test(a)));
 r = await api('/api/marketplace/fixos');
-t('sugere o lacre', r.j.sugestoes.some((s) => s.codigo === 'LACRE'));
-r = await api('/api/marketplace/fixos', 'POST', { fixos: [{ codigo: 'LACRE', valor: '0,18' }, { codigo: 'NAOEXISTE', valor: 1 }] });
-t('fixos salvos e resolvidos', r.j.fixos[0].produto_id === '502' && r.j.fixos[1].produto_id === null);
+t('sugere o lacre', r.j.sugestoes.some((s) => s.termo === 'LACRE'));
+psql(`INSERT INTO produtos_bling (id, codigo, nome, formato, preco, peso_bruto) VALUES (506, null, 'KIT LACRE FRONTEC BRANCO', 'S', 0.18, 0);`);
+r = await api('/api/marketplace/fixos', 'POST', { fixos: [{ termo: 'kit lacre frontec', valor: '0,18' }, { termo: 'NAOEXISTE', valor: 1 }] });
+t('fixo por parte do nome pega as variações (com e sem código)', r.j.fixos[0].produtos.map((p) => p.id).sort().join() === '502,506' && r.j.fixos[1].produtos.length === 0);
 r = await api('/api/marketplace');
 const c102 = r.j.pedidos.find((p) => p.numero === '3552').componentes;
 const lacre = c102.find((c) => c.codigo === 'LACRE'), tubo = c102.find((c) => c.codigo === 'D110160');

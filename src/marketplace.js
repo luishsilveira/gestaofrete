@@ -16,22 +16,29 @@ export async function lerFixos(db) {
   return r.rows.length && Array.isArray(r.rows[0].valor) ? r.rows[0].valor : [];
 }
 
-// Lista de componentes com valor fixo: [{ codigo, valor }] → resolve o produto pelo código.
+// Lista de componentes com valor fixo: [{ termo, valor }]. O termo é o código do produto no Bling ou parte do nome
+// (ex.: "KIT LACRE FRONTEC" pega todas as variações desse lacre). Guarda os produtos encontrados.
 export async function salvarFixos(db, lista, usuario) {
-  const L = (Array.isArray(lista) ? lista : []).map((x) => ({ codigo: String(x.codigo || '').trim(), valor: num(String(x.valor).replace(',', '.')) }))
-    .filter((x) => x.codigo && x.valor >= 0).slice(0, 50);
-  const prods = L.length ? (await db.query('SELECT id, codigo, nome FROM produtos_bling WHERE codigo = ANY($1::text[])', [L.map((x) => x.codigo)])).rows : [];
-  const fixos = L.map((x) => { const p = prods.find((y) => y.codigo === x.codigo); return { ...x, produto_id: p ? String(p.id) : null, nome: p ? p.nome : null }; });
+  const L = (Array.isArray(lista) ? lista : []).map((x) => ({ termo: String(x.termo ?? x.codigo ?? '').trim(), valor: num(String(x.valor).replace(',', '.')) }))
+    .filter((x) => x.termo && x.valor >= 0).slice(0, 50);
+  const fixos = [];
+  for (const x of L) {
+    let prods = (await db.query('SELECT id, codigo, nome FROM produtos_bling WHERE codigo = $1', [x.termo])).rows;
+    if (!prods.length) prods = (await db.query(
+      `SELECT id, codigo, nome FROM produtos_bling WHERE nome ILIKE '%' || $1 || '%' ORDER BY nome LIMIT 50`,
+      [x.termo.replace(/[%_\\]/g, (c) => '\\' + c)])).rows;
+    fixos.push({ ...x, produtos: prods.map((p) => ({ id: String(p.id), codigo: p.codigo, nome: p.nome })) });
+  }
   await db.query(`INSERT INTO app_config (chave, valor, atualizado_por) VALUES ('valores_fixos', $1, $2)
                   ON CONFLICT (chave) DO UPDATE SET valor = $1, atualizado_em = now(), atualizado_por = $2`, [JSON.stringify(fixos), usuario]);
   return fixos;
 }
 
-// Sugestões de componentes com valor fixo: produtos usados em kits cujo nome tem "lacre".
+// Sugestões: componentes de kits com "lacre" no nome (com ou sem código).
 export async function sugestoesFixos(db) {
   return (await db.query(
-    `SELECT DISTINCT p.codigo, p.nome FROM produtos_bling p JOIN produtos_estrutura e ON e.componente_id = p.id
-      WHERE p.nome ILIKE '%lacre%' AND p.codigo IS NOT NULL ORDER BY 1 LIMIT 10`)).rows;
+    `SELECT DISTINCT p.id, p.codigo, p.nome FROM produtos_bling p JOIN produtos_estrutura e ON e.componente_id = p.id
+      WHERE p.nome ILIKE '%lacre%' ORDER BY p.nome LIMIT 10`)).rows.map((p) => ({ id: String(p.id), termo: p.codigo || p.nome, codigo: p.codigo, nome: p.nome }));
 }
 
 export async function analisarMarketplace(db, opcoes = {}) {
@@ -69,7 +76,12 @@ export async function analisarMarketplace(db, opcoes = {}) {
        FROM produtos_estrutura e LEFT JOIN produtos_bling c ON c.id = e.componente_id
       WHERE e.produto_id = ANY($1::bigint[]) ORDER BY e.produto_id, e.componente_id`, [prodIds])).rows : [];
   const fixos = await lerFixos(db);
-  const fixoDe = (id, codigo) => { const f = fixos.find((x) => (x.produto_id && String(x.produto_id) === String(id)) || (codigo && x.codigo === codigo)); return f ? num(f.valor) : null; };
+  // versão anterior guardava { codigo, produto_id }; a atual guarda { termo, produtos: [{ id }] }
+  const fixoDe = (id, codigo) => {
+    const f = fixos.find((x) => (x.produtos || []).some((p) => String(p.id) === String(id)) || (x.produto_id && String(x.produto_id) === String(id))
+      || (codigo && (x.codigo === codigo || x.termo === codigo)));
+    return f ? num(f.valor) : null;
+  };
 
   const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set(), nomesSemPeso = new Set();
   const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
