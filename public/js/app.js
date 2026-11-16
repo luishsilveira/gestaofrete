@@ -360,6 +360,52 @@ const hojeISO=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOS
 const diasAtras=n=>new Date(Date.now()-n*864e5-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const n2=(v,c=2)=>(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c});
 let MKT=null, PODE_MKT=false;
+
+// ---------- Exportação: CSV (Excel em português, ";") e XLSX gerado no navegador ----------
+function baixarArquivo(nome,blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome.replace(/\s+/g,'-'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+function baixarCSV(nome,cols,linhas){
+  const cel=v=>{ if(v==null) return ''; if(typeof v==='number') return String(v).replace('.',','); v=String(v); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const dt=v=>{ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:v; };
+  baixarArquivo(nome,new Blob(['\ufeff'+cols.map(c=>c[0]).join(';')+'\n'+linhas.map(l=>l.map((v,x)=>cel(cols[x]&&cols[x][2]==='data'?dt(v):v)).join(';')).join('\n')],{type:'text/csv;charset=utf-8'}));
+}
+// planilhas: [{nome, cols:[[título, largura, formato]], linhas:[[...]]}]; formato: 'brl', 'num', 'num4', 'kg', 'pct', 'data' ou vazio (texto)
+function baixarXLSX(nome,planilhas){
+  const enc=new TextEncoder(), xe=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'');
+  const FMT={brl:3,num:4,num4:5,kg:6,pct:7,data:8,int:9}; // índices de estilo em styles.xml
+  const colL=i=>{ let s=''; i++; while(i){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; };
+  const dataSerial=v=>{ const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?(Date.UTC(+m[1],+m[2]-1,+m[3])-Date.UTC(1899,11,30))/864e5:null; };
+  const folha=pl=>{
+    const cab=`<row r="1">${pl.cols.map((c,i)=>`<c r="${colL(i)}1" t="inlineStr" s="1"><is><t>${xe(c[0])}</t></is></c>`).join('')}</row>`;
+    const rows=pl.linhas.map((l,ri)=>`<row r="${ri+2}">${l.map((v,i)=>{ const ref=colL(i)+(ri+2), f=pl.cols[i][2];
+      if(v==null||v==='') return '';
+      if(f==='data'){ const n=dataSerial(v); if(n!=null) return `<c r="${ref}" s="${FMT.data}"><v>${n}</v></c>`; }
+      if(f&&typeof v==='number'&&isFinite(v)) return `<c r="${ref}" s="${FMT[f]||0}"><v>${v}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`; }).join('')}</row>`).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${pl.cols.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${c[1]||12}" customWidth="1"/>`).join('')}</cols><sheetData>${cab}${rows}</sheetData><autoFilter ref="A1:${colL(pl.cols.length-1)}${pl.linhas.length+1}"/></worksheet>`;
+  };
+  const arquivos=[
+    ['[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${planilhas.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`],
+    ['_rels/.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${planilhas.map((p,i)=>`<sheet name="${xe(p.nome.slice(0,31))}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${planilhas.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${planilhas.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ['xl/styles.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="5"><numFmt numFmtId="164" formatCode="&quot;R$&quot; #,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.0000"/><numFmt numFmtId="166" formatCode="#,##0.000"/><numFmt numFmtId="167" formatCode="0.0&quot;%&quot;"/><numFmt numFmtId="168" formatCode="dd/mm/yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0A2036"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="10"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="168" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+    ...planilhas.map((p,i)=>[`xl/worksheets/sheet${i+1}.xml`,folha(p)]),
+  ].map(([n,c])=>[enc.encode(n),enc.encode(c)]);
+  // ZIP sem compressão (método "store")
+  const crcT=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+  const crc=b=>{ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=crcT[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+  const partes=[], central=[]; let pos=0;
+  for(const [n,c] of arquivos){
+    const h=new DataView(new ArrayBuffer(30)), k=crc(c);
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(8,0,true); h.setUint32(14,k,true); h.setUint32(18,c.length,true); h.setUint32(22,c.length,true); h.setUint16(26,n.length,true);
+    partes.push(new Uint8Array(h.buffer),n,c);
+    const d=new DataView(new ArrayBuffer(46)); d.setUint32(0,0x02014b50,true); d.setUint16(4,20,true); d.setUint16(6,20,true); d.setUint32(16,k,true); d.setUint32(20,c.length,true); d.setUint32(24,c.length,true); d.setUint16(28,n.length,true); d.setUint32(42,pos,true);
+    central.push(new Uint8Array(d.buffer),n); pos+=30+n.length+c.length;
+  }
+  const tamC=central.reduce((s,b)=>s+b.length,0), fim=new DataView(new ArrayBuffer(22));
+  fim.setUint32(0,0x06054b50,true); fim.setUint16(8,arquivos.length,true); fim.setUint16(10,arquivos.length,true); fim.setUint32(12,tamC,true); fim.setUint32(16,pos,true);
+  baixarArquivo(nome,new Blob([...partes,...central,new Uint8Array(fim.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
 document.querySelectorAll('#mkt [data-dias]').forEach(b=>b.onclick=()=>{ $('m_de').value=diasAtras(+b.dataset.dias); $('m_ate').value=hojeISO(); carregarMkt(); });
 ['m_de','m_ate','m_canal','m_ipi'].forEach(id=>$(id).addEventListener('change',()=>carregarMkt()));
 $('m_fixos_btn').onclick=()=>{ $('m_fixos').classList.toggle('hide'); if(!$('m_fixos').classList.contains('hide')) carregarFixos(); };
@@ -391,7 +437,7 @@ function desenharMkt(){
   <div class="card"><h2>De cada R$ 100 vendidos no ${esc(canal)}</h2>
     <div class="faixa-leg small">${fatias.map(([n,v,c])=>`<span><i class="${c}"></i>${n}: R$ ${n2(pc(v))} (${brl(v)})</span>`).join('')}</div>
     <div class="faixa">${fatias.map(([n,v,c])=>`<div class="${c}" style="flex:${Math.max(pc(v),0.5)}" title="${n}: ${brl(v)} (R$ ${n2(pc(v))} de cada R$ 100)">${pc(v)>=6?`<span>${n}<br><b>R$ ${n2(pc(v))}</b></span>`:''}</div>`).join('')}</div></div>
-  <div class="card"><div class="hist-top"><h2 style="margin:0">Por produto (componentes dos kits)</h2><button class="btn btn2 btn-mini" id="m_csv">Baixar planilha (CSV)</button></div>
+  <div class="card"><div class="hist-top"><h2 style="margin:0">Por produto (componentes dos kits)</h2><button class="btn btn2 btn-mini" id="m_csv">Exportar CSV</button></div>
     <p class="small">Valor recebido rateado pelo peso de cada componente${d.fixos.length?'; itens com valor fixo ficam com o valor configurado':''}. "% do preço" compara o recebido por unidade com o preço de cadastro no Bling.</p>
     <div class="tbl-wrap"><table><tr><th>Código</th><th>Produto</th><th class="n">Pedidos</th><th class="n">Quantidade</th><th class="n">Peso</th><th class="n">Recebido</th><th class="n">Por unidade</th><th>Por kg</th><th class="n">Preço cadastro</th><th class="n">% do preço</th></tr>
     ${d.produtos.map(p=>`<tr><td>${esc(p.codigo||'')}</td><td>${esc(p.nome||'')}${p.fixo?' <span class="badge b-tab">valor fixo</span>':''}</td><td class="n">${p.pedidos}</td><td class="n">${n2(p.qtd,0)}</td>
@@ -403,9 +449,10 @@ function desenharMkt(){
     ${d.anuncios.map(a=>`<tr><td>${esc(a.codigo||'')}</td><td>${esc(a.nome||'')}${a.kit?' <span class="canal canal-mk">kit</span>':''}</td><td class="n">${a.vendas}</td><td class="n">${n2(a.qtd,0)}</td>
       <td class="n">${brl(a.total)}</td><td class="n">${brl(a.liquido)}</td><td class="n">${a.pctRecebido!=null?n2(a.pctRecebido,1)+'%':'—'}</td><td class="n">${a.liquidoPorVenda!=null?brl(a.liquidoPorVenda):'—'}</td>
       <td class="n">${a.peso>0?n2(a.peso,2)+' kg':'—'}</td><td class="n">${a.porKg!=null?brl(a.porKg):'—'}</td></tr>`).join('')}</table></div></div>
-  <div class="card"><h2>Pedidos (${d.pedidos.length}${r.pedidos>d.pedidos.length?' de '+r.pedidos:''})</h2><p class="small">Clique num pedido para ver o rateio por componente.</p>
+  <div class="card"><div class="hist-top"><h2 style="margin:0">Pedidos (${d.pedidos.length})</h2><span style="flex:1"></span><button class="btn btn2 btn-mini" id="m_xlsx">Exportar Excel</button><button class="btn btn2 btn-mini" id="m_csv2">Exportar CSV</button></div>
+    <p class="small">Clique num pedido para ver o rateio por componente.${d.pedidos.length>500?' Mostrando os 500 mais recentes; a exportação traz todos.':''} O Excel tem duas abas: Pedidos e Rateio por componente.</p>
     <div class="tbl-wrap"><table id="m_ped"><tr><th>Nº</th><th>Nº loja</th><th>Data</th><th>Cliente</th><th class="n" title="Valor base no marketplace (o que o comprador pagou)">Vendido</th><th class="n">Comissão</th><th class="n">Frete</th><th class="n">IPI</th><th class="n">Líquido</th><th class="n">Mercadoria</th></tr>
-    ${d.pedidos.map((p,i)=>`<tr class="lin" data-i="${i}"><td>${esc(p.numero)}</td><td class="small">${esc(p.numero_loja||'')}</td><td>${dataBR(p.data)}</td><td>${esc(p.cliente||'')}</td>
+    ${d.pedidos.slice(0,500).map((p,i)=>`<tr class="lin" data-i="${i}"><td>${esc(p.numero)}</td><td class="small">${esc(p.numero_loja||'')}</td><td>${dataBR(p.data)}</td><td>${esc(p.cliente||'')}</td>
       <td class="n">${brl(+p.total)}${Math.abs(+p.total_bling-+p.total)>0.01?`<br><span class="small" title="Total do pedido no Bling (preço de lista + IPI)">Bling: ${brl(+p.total_bling)}</span>`:''}</td><td class="n">${brl(+p.comissao)}</td><td class="n">${brl(+p.frete)}</td><td class="n">${brl(+p.ipi)}</td><td class="n">${brl(p.liquido)}</td><td class="n">${brl(p.base)}</td></tr>`).join('')}</table></div></div>`;
   $('m_ped').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{
     const nx=tr.nextElementSibling; if(nx&&nx.classList.contains('comp')){ nx.remove(); return; }
@@ -413,12 +460,18 @@ function desenharMkt(){
     tr.insertAdjacentHTML('afterend',`<tr class="comp"><td></td><td colspan="9">${p.aviso?`<span class="small aviso">${esc(p.aviso)}</span>`:`<table class="mini"><tr><th>Componente</th><th class="n">Qtd.</th><th class="n">Peso</th><th>Rateio</th><th class="n">Recebido</th><th class="n">Por unidade</th><th class="n">Por kg</th></tr>
       ${p.componentes.map(c=>`<tr><td>${esc(c.codigo||'')} ${esc(c.nome||'')}</td><td class="n">${n2(c.qtd,0)}</td><td class="n">${c.peso>0?n2(c.peso,3)+' kg':'—'}</td><td class="small">${c.rateio==='fixo'?'valor fixo':c.rateio==='peso'?'pelo peso':c.rateio==='sem peso'?'<span class="aviso">sem peso: fora do rateio</span>':'pela quantidade'}</td>
         <td class="n">${brl(c.valor)}</td><td class="n">${c.qtd>0?'R$ '+n2(c.valor/c.qtd,4):'—'}</td><td class="n">${c.peso>0&&!c.fixo?brl(c.valor/c.peso):'—'}</td></tr>`).join('')}</table>`}</td></tr>`); });
-  $('m_csv').onclick=()=>{
-    const cols=['pedido','numero_loja','data','cliente','vendido','comissao','frete','ipi','liquido','mercadoria','item','componente_codigo','componente','quantidade','peso_kg','rateio','recebido','recebido_unidade','recebido_kg'];
-    const cel=v=>{ v=v==null?'':String(v); if(/^-?\d+(\.\d+)?$/.test(v)) v=v.replace('.',','); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-    const L=[]; d.pedidos.forEach(p=>(p.componentes.length?p.componentes:[{}]).forEach(c=>L.push([p.numero,p.numero_loja,String(p.data).slice(0,10),p.cliente,p.total,p.comissao,p.frete,p.ipi,p.liquido,p.base,c.item,c.codigo,c.nome,c.qtd,c.peso,c.rateio,c.valor,c.qtd?(c.valor/c.qtd).toFixed(4):'',c.peso&&!c.fixo?(c.valor/c.peso).toFixed(2):''])));
-    const csv='﻿'+cols.join(';')+'\n'+L.map(l=>l.map(cel).join(';')).join('\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`resultado-${d.canal}-${d.periodo.de}-a-${d.periodo.ate}.csv`.replace(/\s+/g,'-'); a.click(); };
+  const nomeArq=ext=>`resultado-${d.canal==='marketplace'?'marketplaces':d.canal}-${d.periodo.de}-a-${d.periodo.ate}.${ext}`;
+  const colsPed=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',34],['Situação',16],['Vendido (base marketplace)',14,'brl'],['Total no Bling',14,'brl'],['Comissão',12,'brl'],['Frete marketplace',12,'brl'],['IPI',10,'brl'],['Líquido a receber',14,'brl'],['Mercadoria',14,'brl'],['% recebido',10,'pct'],['Peso (kg)',10,'kg'],['Mercadoria por kg',12,'brl']];
+  const linPed=d.pedidos.map(p=>{ const peso=p.componentes.reduce((s,c)=>s+(+c.peso||0),0);
+    return [p.numero,p.numero_loja||'',String(p.data).slice(0,10),p.cliente||'',p.situacao||'',+p.total,+p.total_bling||null,+p.comissao,+p.frete,+p.ipi,p.liquido,p.base,+p.total?Math.round(p.base/+p.total*1000)/10:null,peso?Math.round(peso*1000)/1000:null,peso?Math.round(p.base/peso*100)/100:null]; });
+  const colsComp=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',30],['Item vendido',14],['Código componente',16],['Componente',40],['Quantidade',10,'int'],['Peso (kg)',10,'kg'],['Rateio',14],['Recebido',12,'brl'],['Recebido por unidade',14,'num4'],['Recebido por kg',12,'brl']];
+  const linComp=[]; d.pedidos.forEach(p=>p.componentes.forEach(c=>linComp.push([p.numero,p.numero_loja||'',String(p.data).slice(0,10),p.cliente||'',c.item||'',c.codigo||'',c.nome||'',+c.qtd,c.peso?Math.round(c.peso*1000)/1000:null,
+    {fixo:'valor fixo',peso:'pelo peso','sem peso':'sem peso',quantidade:'pela quantidade'}[c.rateio]||c.rateio,c.valor,c.qtd?Math.round(c.valor/c.qtd*10000)/10000:null,c.peso&&!c.fixo?Math.round(c.valor/c.peso*100)/100:null])));
+  const colsProd=[['Código',14],['Produto',40],['Valor fixo',9],['Pedidos',9,'int'],['Quantidade',11,'int'],['Peso (kg)',11,'kg'],['Recebido',13,'brl'],['Por unidade',12,'num4'],['Por kg',11,'brl'],['Preço cadastro',13,'num4'],['% do preço',10,'pct']];
+  const linProd=d.produtos.map(p=>[p.codigo||'',p.nome||'',p.fixo?'sim':'',p.pedidos,p.qtd,p.peso||null,p.valor,p.porUnidade,p.porKg,p.preco,p.pctPreco]);
+  $('m_xlsx').onclick=()=>baixarXLSX(nomeArq('xlsx'),[{nome:'Pedidos',cols:colsPed,linhas:linPed},{nome:'Rateio por componente',cols:colsComp,linhas:linComp},{nome:'Por produto',cols:colsProd,linhas:linProd}]);
+  $('m_csv2').onclick=()=>baixarCSV(nomeArq('csv'),colsPed,linPed);
+  $('m_csv').onclick=()=>baixarCSV(nomeArq('csv').replace('.csv','-por-produto.csv'),colsProd,linProd);
 }
 async function carregarFixos(){
   $('m_fixos').innerHTML='<span class="small">Carregando…</span>';

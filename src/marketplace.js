@@ -154,5 +154,5 @@ export async function analisarMarketplace(db, opcoes = {}) {
   resumo.porKg = resumo.peso > 0 ? r2(resumo.base / resumo.peso) : null;
   resumo.pctRetido = resumo.total > 0 ? Math.round((resumo.comissao + resumo.frete) / resumo.total * 1000) / 10 : null;
 
-  return { periodo: { de, ate }, canal, descontarIpi, resumo, produtos, anuncios, pedidos: linhasPedidos.slice(0, 500), fixos, avisos: [...avisos] };
+  return { periodo: { de, ate }, canal, descontarIpi, resumo, produtos, anuncios, pedidos: linhasPedidos, fixos, avisos: [...avisos] };
 }
