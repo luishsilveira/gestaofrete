@@ -4,12 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Proloplast – Cotação de Frete</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@500;600;700;800&family=Wix+Madefor+Text:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230a2036%27/%3E%3Cpath d=%27M7 25C7 14 15 7 26 6c0 11-7 19-19 19z%27 fill=%27%239cc01c%27/%3E%3Cpath d=%27M9 23L22 10%27 stroke=%27%230a2036%27 stroke-width=%271.6%27/%3E%3C/svg%3E">
+<meta name="theme-color" content="#0a2036">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <aside id="menu">
-<div class="marca"><b>Proloplast</b><span>Gestão de frete</span></div>
+<a class="marca" href="#calc" data-p="calc" title="Proloplast · Gestão de frete">
+<!-- logo provisório em texto: trocar pelo arquivo do logo oficial (public/img/logo.png) quando disponível -->
+<svg viewBox="0 0 170 44" role="img" aria-label="ProloPlast"><text x="0" y="34" fill="#9cc01c" font-family="'Wix Madefor Display',sans-serif" font-weight="700" font-size="30" letter-spacing="-0.5">ProloPlast</text>
+<path d="M150 18C150 9 156 3 166 2c0 9-6 15-16 16z" fill="#9cc01c"/><path d="M151 17L163 5" stroke="#0a2036" stroke-width="1.4"/></svg>
+<span>Gestão de frete</span></a>
 <nav>
 <div class="grupo">Cotar</div>
 <a href="#calc" data-p="calc"><i>◎</i>Calcular frete</a>
@@ -30,6 +36,7 @@
 <a href="#cfg" data-p="cfg"><i>⚙</i>Empresa remetente</a>
 <a href="#json" data-p="json"><i>{ }</i>Modelo de dados</a>
 </nav>
+<div class="slogan">Tecnologia em Plástico Resistente</div>
 <div class="usuario small" id="usuario"></div>
 </aside>
 <div id="conteudo">

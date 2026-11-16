@@ -314,7 +314,7 @@ function irPara(p,carregar=true){
   if(!TITULOS[p]||(p==='mkt'&&carregar&&!PODE_MKT)) p='calc';
   const sec=p.startsWith('bling-')?'ped':p;
   SECOES.forEach(x=>$(x).classList.toggle('hide',x!==sec));
-  document.querySelectorAll('#menu a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
+  document.querySelectorAll('#menu nav a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
   $('titulo').textContent=TITULOS[p]; document.body.classList.remove('menu-aberto');
   if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
   if(!carregar) return;
