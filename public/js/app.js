@@ -308,8 +308,8 @@ async function iniciarOnline(){
 
 // ---------- Navegação (menu lateral) ----------
 const TITULOS={calc:'Calcular frete','bling-pedidos':'Bling · Pedidos','bling-propostas':'Bling · Propostas','bling-notas':'Bling · Notas fiscais','bling-produtos':'Bling · Produtos',
-  hist:'Histórico de cotações',div:'Divergências',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
-const SECOES=['calc','tab','ped','hist','div','integ','cfg','json'];
+  hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
+const SECOES=['calc','tab','ped','hist','div','integ','cfg','json','mkt'];
 function irPara(p,carregar=true){
   if(!TITULOS[p]) p='calc';
   const sec=p.startsWith('bling-')?'ped':p;
@@ -319,7 +319,7 @@ function irPara(p,carregar=true){
   if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
   if(!carregar) return;
   if(sec==='ped') mudarRecurso(p.slice(6)); else if(p==='hist') carregarHistorico(); else if(p==='div') analiseDivergencias();
-  else if(p==='integ') carregarIntegracoes(); else if(p==='cfg') carregarConfig();
+  else if(p==='integ') carregarIntegracoes(); else if(p==='mkt') carregarMkt(); else if(p==='cfg') carregarConfig();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('#menu a').forEach(a=>a.onclick=e=>{ e.preventDefault(); irPara(a.dataset.p); });
@@ -353,6 +353,93 @@ async function carregarIntegracoes(){
         el.innerHTML=r.ok?`<span class="ok">Conexão ok</span>: ${brl(r.total)}${r.prazo?' · '+fp(r.prazo):''}${r.id?' · cotação nº '+esc(r.id):''} (${(r.ms/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})} s)`:`<span class="err">Falhou</span>: ${esc(r.erro)}`; }
       catch(e){ el.innerHTML='<span class="err">'+esc(e.message)+'</span>'; } finally{ b.disabled=false; } });
   }catch(e){ $('i_lista').innerHTML='<div class="small err">Erro: '+esc(e.message)+'</div>'; }
+}
+
+// ---------- Resultado no marketplace (quanto recebemos de fato por produto) ----------
+const hojeISO=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const diasAtras=n=>new Date(Date.now()-n*864e5-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const n2=(v,c=2)=>(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c});
+let MKT=null;
+document.querySelectorAll('#mkt [data-dias]').forEach(b=>b.onclick=()=>{ $('m_de').value=diasAtras(+b.dataset.dias); $('m_ate').value=hojeISO(); carregarMkt(); });
+['m_de','m_ate','m_canal','m_ipi'].forEach(id=>$(id).addEventListener('change',()=>carregarMkt()));
+$('m_fixos_btn').onclick=()=>{ $('m_fixos').classList.toggle('hide'); if(!$('m_fixos').classList.contains('hide')) carregarFixos(); };
+async function carregarMkt(){
+  if(!$('m_de').value){ $('m_de').value=diasAtras(30); $('m_ate').value=hojeISO(); }
+  $('m_out').innerHTML='<div class="card small">Calculando…</div>';
+  try{ const q=new URLSearchParams({de:$('m_de').value,ate:$('m_ate').value,canal:$('m_canal').value,ipi:$('m_ipi').checked?'1':'0'});
+    MKT=await api('/api/marketplace?'+q); desenharMkt(); }
+  catch(e){ $('m_out').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
+}
+function desenharMkt(){
+  const d=MKT, r=d.resumo, canal=d.canal==='marketplace'?'marketplaces':d.canal;
+  if(!r.pedidos){ $('m_out').innerHTML=`<div class="card small">Nenhum pedido de ${esc(canal)} importado entre ${dataBR(d.periodo.de)} e ${dataBR(d.periodo.ate)}.</div>`; return; }
+  const pc=v=>r.total>0?(v/r.total*100):0;
+  const fatias=[['Comissão',r.comissao,'f-com'],['Frete',r.frete,'f-fre'],...(d.descontarIpi?[['IPI',r.ipi,'f-ipi']]:[]),['Mercadoria',r.base,'f-mer']];
+  const kpi=(t,v,sub='')=>`<div class="kpi"><span>${t}</span><b>${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
+  const maxKg=Math.max(...d.produtos.filter(p=>!p.fixo).map(p=>p.porKg||0),0.01);
+  $('m_out').innerHTML=`
+  ${d.avisos.length?`<div class="mkt-aviso small">${d.avisos.map(a=>'• '+esc(a)).join('<br>')}</div>`:''}
+  <div class="kpis">
+    ${kpi('Pedidos',r.pedidos,`${dataBR(d.periodo.de)} a ${dataBR(d.periodo.ate)}`)}
+    ${kpi('Vendido',brl(r.total))}
+    ${kpi('Comissão + frete',brl(r.comissao+r.frete),`${n2(r.pctRetido,1)}% do vendido`)}
+    ${kpi('Líquido a receber',brl(r.liquido))}
+    ${kpi(d.descontarIpi?'Mercadoria (sem IPI)':'Mercadoria',brl(r.base),`${n2(pc(r.base),1)}% do vendido`)}
+    ${kpi('Peso vendido',n2(r.peso,1)+' kg')}
+    ${kpi('Recebido por kg',r.porKg!=null?brl(r.porKg):'—','mercadoria ÷ peso')}
+  </div>
+  <div class="card"><h2>De cada R$ 100 vendidos no ${esc(canal)}</h2>
+    <div class="faixa-leg small">${fatias.map(([n,v,c])=>`<span><i class="${c}"></i>${n}: R$ ${n2(pc(v))} (${brl(v)})</span>`).join('')}</div>
+    <div class="faixa">${fatias.map(([n,v,c])=>`<div class="${c}" style="flex:${Math.max(pc(v),0.5)}" title="${n}: ${brl(v)} (R$ ${n2(pc(v))} de cada R$ 100)">${pc(v)>=6?`<span>${n}<br><b>R$ ${n2(pc(v))}</b></span>`:''}</div>`).join('')}</div></div>
+  <div class="card"><div class="hist-top"><h2 style="margin:0">Por produto (componentes dos kits)</h2><button class="btn btn2 btn-mini" id="m_csv">Baixar planilha (CSV)</button></div>
+    <p class="small">Valor recebido rateado pelo peso de cada componente${d.fixos.length?'; itens com valor fixo ficam com o valor configurado':''}. "% do preço" compara o recebido por unidade com o preço de cadastro no Bling.</p>
+    <div class="tbl-wrap"><table><tr><th>Código</th><th>Produto</th><th class="n">Pedidos</th><th class="n">Quantidade</th><th class="n">Peso</th><th class="n">Recebido</th><th class="n">Por unidade</th><th>Por kg</th><th class="n">Preço cadastro</th><th class="n">% do preço</th></tr>
+    ${d.produtos.map(p=>`<tr><td>${esc(p.codigo||'')}</td><td>${esc(p.nome||'')}${p.fixo?' <span class="badge b-tab">valor fixo</span>':''}</td><td class="n">${p.pedidos}</td><td class="n">${n2(p.qtd,0)}</td>
+      <td class="n">${p.peso>0?n2(p.peso,2)+' kg':'<span class="aviso">sem peso</span>'}</td><td class="n">${brl(p.valor)}</td><td class="n">${p.porUnidade!=null?'R$ '+n2(p.porUnidade,4):'—'}</td>
+      <td class="barra">${p.porKg!=null&&!p.fixo?`<div><i style="width:${Math.round(p.porKg/maxKg*100)}%"></i></div><span>${brl(p.porKg)}</span>`:'—'}</td>
+      <td class="n">${p.preco!=null?'R$ '+n2(p.preco,4):'—'}</td><td class="n ${p.pctPreco!=null&&p.pctPreco<100?'dif-pos':''}">${p.pctPreco!=null?n2(p.pctPreco,1)+'%':'—'}</td></tr>`).join('')}</table></div></div>
+  <div class="card"><h2>Por anúncio (produto vendido)</h2>
+    <div class="tbl-wrap"><table><tr><th>Código</th><th>Produto vendido</th><th class="n">Vendas</th><th class="n">Qtd.</th><th class="n">Vendido</th><th class="n">Recebido (mercadoria)</th><th class="n">% recebido</th><th class="n">Recebido por unidade</th><th class="n">Peso</th><th class="n">Por kg</th></tr>
+    ${d.anuncios.map(a=>`<tr><td>${esc(a.codigo||'')}</td><td>${esc(a.nome||'')}${a.kit?' <span class="canal canal-mk">kit</span>':''}</td><td class="n">${a.vendas}</td><td class="n">${n2(a.qtd,0)}</td>
+      <td class="n">${brl(a.total)}</td><td class="n">${brl(a.liquido)}</td><td class="n">${a.pctRecebido!=null?n2(a.pctRecebido,1)+'%':'—'}</td><td class="n">${a.liquidoPorVenda!=null?brl(a.liquidoPorVenda):'—'}</td>
+      <td class="n">${a.peso>0?n2(a.peso,2)+' kg':'—'}</td><td class="n">${a.porKg!=null?brl(a.porKg):'—'}</td></tr>`).join('')}</table></div></div>
+  <div class="card"><h2>Pedidos (${d.pedidos.length}${r.pedidos>d.pedidos.length?' de '+r.pedidos:''})</h2><p class="small">Clique num pedido para ver o rateio por componente.</p>
+    <div class="tbl-wrap"><table id="m_ped"><tr><th>Nº</th><th>Nº loja</th><th>Data</th><th>Cliente</th><th class="n">Vendido</th><th class="n">Comissão</th><th class="n">Frete</th><th class="n">IPI</th><th class="n">Líquido</th><th class="n">Mercadoria</th></tr>
+    ${d.pedidos.map((p,i)=>`<tr class="lin" data-i="${i}"><td>${esc(p.numero)}</td><td class="small">${esc(p.numero_loja||'')}</td><td>${dataBR(p.data)}</td><td>${esc(p.cliente||'')}</td>
+      <td class="n">${brl(+p.total)}</td><td class="n">${brl(+p.comissao)}</td><td class="n">${brl(+p.frete)}</td><td class="n">${brl(+p.ipi)}</td><td class="n">${brl(p.liquido)}</td><td class="n">${brl(p.base)}</td></tr>`).join('')}</table></div></div>`;
+  $('m_ped').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>{
+    const nx=tr.nextElementSibling; if(nx&&nx.classList.contains('comp')){ nx.remove(); return; }
+    const p=d.pedidos[+tr.dataset.i];
+    tr.insertAdjacentHTML('afterend',`<tr class="comp"><td></td><td colspan="9">${p.aviso?`<span class="small aviso">${esc(p.aviso)}</span>`:`<table class="mini"><tr><th>Componente</th><th class="n">Qtd.</th><th class="n">Peso</th><th>Rateio</th><th class="n">Recebido</th><th class="n">Por unidade</th><th class="n">Por kg</th></tr>
+      ${p.componentes.map(c=>`<tr><td>${esc(c.codigo||'')} ${esc(c.nome||'')}</td><td class="n">${n2(c.qtd,0)}</td><td class="n">${c.peso>0?n2(c.peso,3)+' kg':'—'}</td><td class="small">${c.rateio==='fixo'?'valor fixo':c.rateio==='peso'?'pelo peso':'pela quantidade'}</td>
+        <td class="n">${brl(c.valor)}</td><td class="n">${c.qtd>0?'R$ '+n2(c.valor/c.qtd,4):'—'}</td><td class="n">${c.peso>0&&!c.fixo?brl(c.valor/c.peso):'—'}</td></tr>`).join('')}</table>`}</td></tr>`); });
+  $('m_csv').onclick=()=>{
+    const cols=['pedido','numero_loja','data','cliente','vendido','comissao','frete','ipi','liquido','mercadoria','item','componente_codigo','componente','quantidade','peso_kg','rateio','recebido','recebido_unidade','recebido_kg'];
+    const cel=v=>{ v=v==null?'':String(v); if(/^-?\d+(\.\d+)?$/.test(v)) v=v.replace('.',','); return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+    const L=[]; d.pedidos.forEach(p=>(p.componentes.length?p.componentes:[{}]).forEach(c=>L.push([p.numero,p.numero_loja,String(p.data).slice(0,10),p.cliente,p.total,p.comissao,p.frete,p.ipi,p.liquido,p.base,c.item,c.codigo,c.nome,c.qtd,c.peso,c.rateio,c.valor,c.qtd?(c.valor/c.qtd).toFixed(4):'',c.peso&&!c.fixo?(c.valor/c.peso).toFixed(2):''])));
+    const csv='﻿'+cols.join(';')+'\n'+L.map(l=>l.map(cel).join(';')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`resultado-${d.canal}-${d.periodo.de}-a-${d.periodo.ate}.csv`.replace(/\s+/g,'-'); a.click(); };
+}
+async function carregarFixos(){
+  $('m_fixos').innerHTML='<span class="small">Carregando…</span>';
+  try{ const j=await api('/api/marketplace/fixos'); let L=j.fixos.map(f=>({codigo:f.codigo,valor:f.valor,nome:f.nome}));
+    const desenhar=()=>{ $('m_fixos').innerHTML=`<h2>Itens com valor fixo</h2><p class="small">Componentes que recebem um valor fixo por unidade em vez de entrar no rateio pelo peso (ex.: lacre a R$ 0,18). Informe o código do produto no Bling.</p>
+      <table class="mini" style="max-width:640px"><tr><th>Código</th><th>Produto</th><th class="n">Valor por unidade (R$)</th><th></th></tr>
+      ${L.map((f,i)=>`<tr><td><input data-c="${i}" value="${esc(f.codigo)}"></td><td class="small">${esc(f.nome||'')}</td><td><input data-v="${i}" value="${String(f.valor).replace('.',',')}" inputmode="decimal" style="text-align:right"></td><td><a href="#" class="small" data-r="${i}">remover</a></td></tr>`).join('')}</table>
+      <div class="acoes" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn btn2 btn-mini" id="mf_add">Adicionar</button>
+      ${j.sugestoes.filter(x=>!L.some(f=>f.codigo===x.codigo)).map(x=>`<button class="btn btn2 btn-mini" data-sug="${esc(x.codigo)}">+ ${esc(x.codigo)} – ${esc(x.nome)} a R$ 0,18</button>`).join('')}
+      <button class="btn" id="mf_salvar">Salvar e recalcular</button><span class="small" id="mf_st"></span></div>`;
+      $('m_fixos').querySelectorAll('[data-c]').forEach(e=>e.oninput=()=>L[+e.dataset.c].codigo=e.value.trim());
+      $('m_fixos').querySelectorAll('[data-v]').forEach(e=>e.oninput=()=>L[+e.dataset.v].valor=e.value);
+      $('m_fixos').querySelectorAll('[data-r]').forEach(e=>e.onclick=ev=>{ ev.preventDefault(); L.splice(+e.dataset.r,1); desenhar(); });
+      $('m_fixos').querySelectorAll('[data-sug]').forEach(e=>e.onclick=()=>{ const x=j.sugestoes.find(s=>s.codigo===e.dataset.sug); L.push({codigo:x.codigo,nome:x.nome,valor:'0,18'}); desenhar(); });
+      $('mf_add').onclick=()=>{ L.push({codigo:'',valor:''}); desenhar(); };
+      $('mf_salvar').onclick=async()=>{ try{ const r=await api('/api/marketplace/fixos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fixos:L})});
+        L=r.fixos.map(f=>({codigo:f.codigo,valor:f.valor,nome:f.nome})); desenhar(); $('mf_st').innerHTML=r.fixos.some(f=>!f.nome)?'<span class="aviso">Salvo. Algum código não foi encontrado nos produtos importados.</span>':'<span class="ok">Salvo.</span>'; carregarMkt(); }
+        catch(e){ $('mf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
+    };
+    desenhar();
+  }catch(e){ $('m_fixos').innerHTML='<span class="small err">'+esc(e.message)+'</span>'; }
 }
 
 // ---------- Configurações: empresa remetente ----------

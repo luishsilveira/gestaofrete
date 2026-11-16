@@ -6,6 +6,7 @@
 
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
+import { analisarMarketplace, lerFixos, salvarFixos, sugestoesFixos } from './marketplace.js';
 import { SCHEMA_ONLINE, MIGRAR_ONLINE, cotarOnline, testarIntegracao, statusIntegracoes, ativarIntegracao, configuracao, salvarConfiguracao } from './online.js';
 import { SCHEMA_DOCS, buscarPedido, buscarProposta, buscarNota, completarProdutos, gravarPedidos, gravarPropostas, gravarNotas, sincronizarTudo } from './sync.js';
 
@@ -537,6 +538,15 @@ export default {
       if (url.pathname === '/api/online/testar' && request.method === 'POST') {
         const d = await corpoJson();
         return json(await comBanco(env, ctx, (db) => testarIntegracao(env, db, String(d.id || ''), usuario)));
+      }
+      // resultado das vendas em marketplace (src/marketplace.js)
+      if (url.pathname === '/api/marketplace') {
+        const q = url.searchParams;
+        return json(await comBanco(env, ctx, (db) => analisarMarketplace(db, { de: q.get('de'), ate: q.get('ate'), canal: q.get('canal'), descontarIpi: q.get('ipi') !== '0' })));
+      }
+      if (url.pathname === '/api/marketplace/fixos') {
+        if (request.method === 'POST') { const d = await corpoJson(); await comBanco(env, ctx, (db) => salvarFixos(db, d.fixos, usuario)); }
+        return json(await comBanco(env, ctx, async (db) => ({ fixos: await lerFixos(db), sugestoes: await sugestoesFixos(db) })));
       }
       if (url.pathname === '/api/config') {
         if (request.method === 'POST') { const d = await corpoJson(); await comBanco(env, ctx, (db) => salvarConfiguracao(db, d, usuario)); }

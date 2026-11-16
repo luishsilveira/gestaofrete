@@ -13,6 +13,7 @@ src/index.js                              servidor: API do histórico de cotaç�
 src/bling.js                              integração com o Bling (OAuth, tokens, chamadas à API)
 src/sync.js                               importação do Bling (pedidos, propostas, NF-e, produtos e kits)
 src/online.js                             cotação online: integrações ativas, empresa remetente, registro das consultas
+src/marketplace.js                        resultado das vendas em marketplace (rateio do líquido por produto)
 src/apis/comum.js                         utilidades e o contrato dos conectores
 src/apis/braspress.js                     conector Braspress (API própria)
 src/apis/ssw.js                           conector SSW (Expresso Leomar e outras transportadoras do sistema SSW)
@@ -67,6 +68,16 @@ Para cada transportadora com integração ativa, a calculadora consulta a API e 
 - **Registro e cache:** todas as consultas, inclusive as que dão erro e os testes, ficam em `api_consultas`, sem senhas. A mesma consulta no mesmo dia vem do registro, sem chamar a transportadora. Tempo limite: 15 s por transportadora; as consultas rodam em paralelo.
 - **API interna:** `POST /api/online/cotar` · `GET /api/online/status` · `POST /api/online/ativar` · `POST /api/online/testar` · `GET|POST /api/config`.
 - **Testes:** `npm run test:online` (Braspress e SSW simulados, PostgreSQL local).
+
+## Resultado no marketplace (menu Vendas)
+
+Mostra quanto a Proloplast recebe de fato pelos produtos vendidos no Mercado Livre (ou em outro marketplace), a partir dos pedidos importados do Bling.
+
+- **Por pedido:** líquido = total da venda − taxa do marketplace (`taxas.taxaComissao`) − custo do frete (`taxas.custoFrete`). Com "Descontar IPI" (padrão), o IPI (`tributacao.totalIPI`) também sai, porque está no total mas é imposto. O resultado é a **mercadoria**.
+- **Rateio:** a mercadoria é dividida entre os itens do pedido pelo valor de cada item. Dentro de um kit, os componentes com **valor fixo** (ex.: lacre a R$ 0,18, configurado em "Itens com valor fixo", `app_config.valores_fixos`) ficam com esse valor; o restante é dividido entre os outros componentes **pelo peso** (peso bruto do cadastro × quantidade). Sem peso cadastrado, pela quantidade.
+- **Telas:** indicadores do período (vendido, comissão + frete, líquido, mercadoria, peso, recebido por kg); faixa "de cada R$ 100 vendidos"; tabela por produto (componente) com recebido por unidade, por kg e % do preço de cadastro; tabela por anúncio (produto vendido); pedidos com o rateio de cada um; exportação CSV.
+- **API:** `GET /api/marketplace?de=&ate=&canal=Mercado Livre|Shopee|…|marketplace&ipi=0|1` · `GET|POST /api/marketplace/fixos`.
+- **Testes:** `node tests/marketplace.test.mjs`.
 
 ## Valores cotados manualmente (divergências)
 

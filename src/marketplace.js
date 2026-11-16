@@ -1,0 +1,139 @@
+// Resultado das vendas em marketplace (Mercado Livre e outros): quanto a Proloplast recebe de fato
+// por produto, depois da comissão e do frete cobrados pelo marketplace.
+//
+// Para cada pedido:
+//   líquido = total da venda − taxa do marketplace − custo do frete (− IPI, se marcado: é imposto, não receita)
+//   o líquido é dividido entre os itens do pedido pelo valor de cada item;
+//   dentro de um kit, os componentes com valor fixo (ex.: lacre a R$ 0,18) ficam com esse valor
+//   e o restante é dividido entre os demais componentes pelo peso (sem peso cadastrado: pela quantidade).
+// Resultado: R$ recebido por unidade e por kg de cada produto, comparado com o preço de cadastro.
+
+const num = (v) => { const n = +v; return Number.isFinite(n) ? n : 0; };
+const r2 = (v) => Math.round(v * 100) / 100;
+
+export async function lerFixos(db) {
+  const r = await db.query(`SELECT valor FROM app_config WHERE chave = 'valores_fixos'`);
+  return r.rows.length && Array.isArray(r.rows[0].valor) ? r.rows[0].valor : [];
+}
+
+// Lista de componentes com valor fixo: [{ codigo, valor }] → resolve o produto pelo código.
+export async function salvarFixos(db, lista, usuario) {
+  const L = (Array.isArray(lista) ? lista : []).map((x) => ({ codigo: String(x.codigo || '').trim(), valor: num(String(x.valor).replace(',', '.')) }))
+    .filter((x) => x.codigo && x.valor >= 0).slice(0, 50);
+  const prods = L.length ? (await db.query('SELECT id, codigo, nome FROM produtos_bling WHERE codigo = ANY($1::text[])', [L.map((x) => x.codigo)])).rows : [];
+  const fixos = L.map((x) => { const p = prods.find((y) => y.codigo === x.codigo); return { ...x, produto_id: p ? String(p.id) : null, nome: p ? p.nome : null }; });
+  await db.query(`INSERT INTO app_config (chave, valor, atualizado_por) VALUES ('valores_fixos', $1, $2)
+                  ON CONFLICT (chave) DO UPDATE SET valor = $1, atualizado_em = now(), atualizado_por = $2`, [JSON.stringify(fixos), usuario]);
+  return fixos;
+}
+
+// Sugestões de componentes com valor fixo: produtos usados em kits cujo nome tem "lacre".
+export async function sugestoesFixos(db) {
+  return (await db.query(
+    `SELECT DISTINCT p.codigo, p.nome FROM produtos_bling p JOIN produtos_estrutura e ON e.componente_id = p.id
+      WHERE p.nome ILIKE '%lacre%' AND p.codigo IS NOT NULL ORDER BY 1 LIMIT 10`)).rows;
+}
+
+export async function analisarMarketplace(db, opcoes = {}) {
+  const dataOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+  const de = dataOk(opcoes.de) ? opcoes.de : new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const ate = dataOk(opcoes.ate) ? opcoes.ate : new Date().toISOString().slice(0, 10);
+  const canal = opcoes.canal || 'Mercado Livre';
+  const descontarIpi = opcoes.descontarIpi !== false;
+
+  const params = [de, ate];
+  let filtroCanal;
+  if (canal === 'marketplace') filtroCanal = `p.canal NOT IN ('Venda direta', 'Loja virtual') AND p.canal IS NOT NULL`;
+  else { params.push(canal); filtroCanal = `p.canal = $${params.length}`; }
+
+  const pedidos = (await db.query(
+    `SELECT p.id, p.numero, p.numero_loja, p.data, p.canal, p.cliente, p.uf, p.situacao_id, s.nome AS situacao, p.nota_fiscal_id,
+            COALESCE(p.valor_total, (p.dados->>'total')::numeric) AS total,
+            COALESCE((p.dados->'taxas'->>'taxaComissao')::numeric, 0) AS comissao,
+            COALESCE(p.custo_frete_marketplace, (p.dados->'taxas'->>'custoFrete')::numeric, 0) AS frete,
+            (p.dados->'taxas'->>'valorBase')::numeric AS valor_base,
+            COALESCE((p.dados->'tributacao'->>'totalIPI')::numeric, (p.dados->>'totalIPI')::numeric, 0) AS ipi,
+            (p.dados->'taxas') IS NOT NULL AS tem_taxas
+       FROM pedidos_bling p LEFT JOIN bling_situacoes s ON s.id = p.situacao_id
+      WHERE p.data BETWEEN $1::date AND $2::date AND ${filtroCanal}
+      ORDER BY p.data DESC, p.id DESC LIMIT 3000`, params)).rows;
+  const ids = pedidos.map((p) => p.id);
+  const itens = ids.length ? (await db.query(
+    `SELECT i.doc_id, i.seq, i.produto_id, i.codigo, i.descricao, i.quantidade, i.valor, i.valor_total,
+            pr.nome AS produto_nome, pr.preco AS produto_preco, w.peso_unitario
+       FROM pedido_itens i LEFT JOIN produtos_bling pr ON pr.id = i.produto_id LEFT JOIN produtos_peso w ON w.id = i.produto_id
+      WHERE i.doc_id = ANY($1::bigint[]) ORDER BY i.doc_id, i.seq`, [ids])).rows : [];
+  const prodIds = [...new Set(itens.map((i) => i.produto_id).filter(Boolean))];
+  const estrutura = prodIds.length ? (await db.query(
+    `SELECT e.produto_id, e.componente_id, e.quantidade, c.codigo, c.nome, c.preco, c.peso_bruto
+       FROM produtos_estrutura e LEFT JOIN produtos_bling c ON c.id = e.componente_id
+      WHERE e.produto_id = ANY($1::bigint[]) ORDER BY e.produto_id, e.componente_id`, [prodIds])).rows : [];
+  const fixos = await lerFixos(db);
+  const fixoDe = (id, codigo) => { const f = fixos.find((x) => (x.produto_id && String(x.produto_id) === String(id)) || (codigo && x.codigo === codigo)); return f ? num(f.valor) : null; };
+
+  const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set();
+  const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
+  const linhasPedidos = [];
+
+  for (const p of pedidos) {
+    const its = itens.filter((i) => String(i.doc_id) === String(p.id));
+    const total = num(p.total), comissao = num(p.comissao), frete = num(p.frete), ipi = num(p.ipi);
+    const liquido = total - comissao - frete;
+    const base = liquido - (descontarIpi ? ipi : 0); // valor a dividir entre os produtos
+    resumo.pedidos++; resumo.total += total; resumo.comissao += comissao; resumo.frete += frete; resumo.ipi += ipi; resumo.liquido += liquido; resumo.base += base;
+    if (!p.tem_taxas) resumo.semTaxas++;
+    if (!its.length) { resumo.semItens++; linhasPedidos.push({ ...p, liquido: r2(liquido), base: r2(base), componentes: [], aviso: 'pedido sem itens importados' }); continue; }
+
+    const somaItens = its.reduce((s, i) => s + (num(i.valor_total) || num(i.valor) * num(i.quantidade)), 0);
+    const comps = [];
+    for (const i of its) {
+      const vItem = num(i.valor_total) || num(i.valor) * num(i.quantidade);
+      const parte = somaItens > 0 ? base * vItem / somaItens : base / its.length;
+      const qtd = num(i.quantidade);
+      const est = estrutura.filter((e) => String(e.produto_id) === String(i.produto_id));
+      // componentes do item: os do kit (quantidade por kit × quantidade vendida) ou o próprio produto
+      const L = est.length
+        ? est.map((e) => ({ id: String(e.componente_id), codigo: e.codigo, nome: e.nome || `produto ${e.componente_id}`, preco: e.preco, qtd: num(e.quantidade) * qtd, pesoUnit: num(e.peso_bruto) }))
+        : [{ id: i.produto_id ? String(i.produto_id) : 'cod:' + i.codigo, codigo: i.codigo, nome: i.produto_nome || i.descricao, preco: i.produto_preco, qtd, pesoUnit: num(i.peso_unitario) }];
+      let resto = parte;
+      for (const c of L) { const f = fixoDe(c.id, c.codigo); if (f != null) { c.fixo = true; c.valor = f * c.qtd; resto -= c.valor; } }
+      const variaveis = L.filter((c) => !c.fixo);
+      const pesoVar = variaveis.reduce((s, c) => s + c.pesoUnit * c.qtd, 0);
+      const qtdVar = variaveis.reduce((s, c) => s + c.qtd, 0);
+      if (variaveis.some((c) => !(c.pesoUnit > 0))) { resumo.semPeso++; avisos.add('Há componentes sem peso cadastrado no Bling: o rateio desses pedidos usa a quantidade.'); }
+      const porPeso = pesoVar > 0 && variaveis.every((c) => c.pesoUnit > 0);
+      for (const c of variaveis) c.valor = porPeso ? resto * c.pesoUnit * c.qtd / pesoVar : (qtdVar > 0 ? resto * c.qtd / qtdVar : 0);
+      for (const c of L) {
+        c.peso = c.pesoUnit * c.qtd;
+        comps.push({ item: i.codigo, ...c, valor: r2(c.valor), rateio: c.fixo ? 'fixo' : porPeso ? 'peso' : 'quantidade' });
+        const k = c.id, g = porProduto.get(k) || { id: k, codigo: c.codigo, nome: c.nome, preco: c.preco != null ? num(c.preco) : null, fixo: !!c.fixo, qtd: 0, peso: 0, valor: 0, pedidos: new Set() };
+        g.qtd += c.qtd; g.peso += c.peso; g.valor += c.valor; g.pedidos.add(p.id); porProduto.set(k, g);
+        resumo.peso += c.peso;
+      }
+      const ka = i.produto_id ? String(i.produto_id) : 'cod:' + i.codigo;
+      const a = porAnuncio.get(ka) || { id: ka, codigo: i.codigo, nome: i.produto_nome || i.descricao, kit: est.length > 0, vendas: 0, qtd: 0, total: 0, liquido: 0, peso: 0 };
+      a.vendas++; a.qtd += qtd; a.total += somaItens > 0 ? total * vItem / somaItens : total / its.length; a.liquido += parte;
+      a.peso += L.reduce((s, c) => s + c.pesoUnit * c.qtd, 0); porAnuncio.set(ka, a);
+    }
+    linhasPedidos.push({ ...p, liquido: r2(liquido), base: r2(base), componentes: comps });
+  }
+
+  const produtos = [...porProduto.values()].map((g) => ({
+    id: g.id, codigo: g.codigo, nome: g.nome, fixo: g.fixo, pedidos: g.pedidos.size, qtd: g.qtd, peso: Math.round(g.peso * 1000) / 1000,
+    valor: r2(g.valor), porUnidade: g.qtd > 0 ? Math.round(g.valor / g.qtd * 10000) / 10000 : null,
+    porKg: g.peso > 0 ? r2(g.valor / g.peso) : null, preco: g.preco,
+    pctPreco: g.preco > 0 && g.qtd > 0 ? Math.round(g.valor / g.qtd / g.preco * 1000) / 10 : null,
+  })).sort((a, b) => b.valor - a.valor);
+  const anuncios = [...porAnuncio.values()].map((a) => ({ ...a, total: r2(a.total), liquido: r2(a.liquido), peso: Math.round(a.peso * 1000) / 1000,
+    liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.peso > 0 ? r2(a.liquido / a.peso) : null,
+    pctRecebido: a.total > 0 ? Math.round(a.liquido / a.total * 1000) / 10 : null })).sort((a, b) => b.liquido - a.liquido);
+
+  if (resumo.semTaxas) avisos.add(`${resumo.semTaxas} pedido(s) sem as taxas do marketplace no Bling: considerados sem comissão e sem frete.`);
+  if (!fixos.length) avisos.add('Nenhum componente com valor fixo configurado (ex.: lacre a R$ 0,18): tudo é rateado pelo peso.');
+  for (const k of ['total', 'comissao', 'frete', 'ipi', 'liquido', 'base']) resumo[k] = r2(resumo[k]);
+  resumo.peso = Math.round(resumo.peso * 1000) / 1000;
+  resumo.porKg = resumo.peso > 0 ? r2(resumo.base / resumo.peso) : null;
+  resumo.pctRetido = resumo.total > 0 ? Math.round((resumo.comissao + resumo.frete) / resumo.total * 1000) / 10 : null;
+
+  return { periodo: { de, ate }, canal, descontarIpi, resumo, produtos, anuncios, pedidos: linhasPedidos.slice(0, 500), fixos, avisos: [...avisos] };
+}
