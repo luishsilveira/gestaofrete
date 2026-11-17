@@ -19,5 +19,7 @@
   "triggers": { "crons": ["*/5 * * * *"] },
   // Mantém as variáveis criadas no painel do Cloudflare a cada publicação pelo GitHub.
   // As credenciais do Bling (BLING_CLIENT_ID e BLING_CLIENT_SECRET) devem ser do tipo Secret.
-  "keep_vars": true
+  "keep_vars": true,
+  // AUD da aplicação no Cloudflare Access: o servidor confere o login (src/acesso.js). Não é segredo.
+  "vars": { "ACCESS_AUD": "6d654de9767443e51566eea650ad92869779891caa86ac2671667c521b621ca8" }
 }
