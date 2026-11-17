@@ -527,45 +527,61 @@ function desenharAcesso(){
   const nomes=Object.fromEntries(ACS.catalogo.map(p=>[p.chave,p.nome]));
   $('pf_lista').innerHTML=ACS.perfis.map((p,i)=>`<div class="perfil"><h3>${esc(p.nome)}${p.sistema?' <span class="pill ok">acesso total</span>':''}<span style="flex:1"></span><span class="small">${p.usuarios} usuário(s)</span> <a href="#" class="small" data-ped="${i}">editar</a></h3>
     ${p.descricao?`<div class="small">${esc(p.descricao)}</div>`:''}<div class="tags">${p.sistema?'<span>Todas as permissões</span>':(p.permissoes.length?p.permissoes.map(k=>`<span>${esc(nomes[k]||k)}</span>`).join(''):'<span>nenhuma permissão</span>')}</div><div id="pf_f${i}"></div></div>`).join('');
-  $('pf_lista').querySelectorAll('[data-ped]').forEach(a=>a.onclick=e=>{ e.preventDefault(); formPerfil(ACS.perfis[+a.dataset.ped],$('pf_f'+a.dataset.ped)); });
+  $('pf_lista').querySelectorAll('[data-ped]').forEach(a=>a.onclick=e=>{ e.preventDefault(); formPerfil(ACS.perfis[+a.dataset.ped]); });
 }
 $('u_novo').onclick=()=>formUsuario(null);
-$('pf_novo').onclick=()=>{ $('pf_lista').insertAdjacentHTML('afterbegin','<div class="perfil" id="pf_nf"></div>'); formPerfil(null,$('pf_nf')); };
+$('pf_novo').onclick=()=>formPerfil(null);
+function abrirModal(html){ $('modal').querySelector('.modal-caixa').innerHTML=html; $('modal').classList.remove('hide'); document.body.style.overflow='hidden';
+  $('modal').querySelectorAll('[data-fechar]').forEach(b=>b.onclick=fecharModal); }
+function fecharModal(){ $('modal').classList.add('hide'); document.body.style.overflow=''; }
+$('modal').addEventListener('mousedown',e=>{ if(e.target===$('modal')) fecharModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('modal').classList.contains('hide')) fecharModal(); });
 function formUsuario(u){
-  const el=$('u_form'), perfis=ACS.perfis;
-  el.innerHTML=`<div class="ufrm"><div class="full"><b>${u?'Editar usuário':'Novo usuário'}</b></div>
-    <div><label>E-mail (o mesmo do login)</label><input id="uf_email" value="${esc(u?u.email:'')}" inputmode="email" autocomplete="off"></div>
-    <div><label>Nome</label><input id="uf_nome" value="${esc(u&&u.nome||'')}"></div>
-    <div><label>Perfil de acesso</label><select id="uf_perfil">${perfis.map(p=>`<option value="${p.id}" ${u&&u.perfil_id===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
-    <div><label>Situação</label><select id="uf_ativo"><option value="1">Ativo</option><option value="0" ${u&&!u.ativo?'selected':''}>Inativo (sem acesso)</option></select></div>
-    <div class="acoes"><button class="btn" id="uf_salvar">Salvar</button><button class="btn btn2" id="uf_cancelar">Cancelar</button>${u?'<span style="flex:1"></span><a href="#" class="small err" id="uf_excluir">excluir usuário</a>':''}<span class="small" id="uf_st"></span></div></div>`;
-  $('uf_cancelar').onclick=()=>el.innerHTML='';
+  abrirModal(`<div class="modal-cab"><h2>${u?'Editar usuário':'Novo usuário'}</h2><button class="x" data-fechar aria-label="Fechar">×</button></div>
+    <div class="modal-corpo"><div class="campos2">
+      <div><label>E-mail (o mesmo usado no login)</label><input id="uf_email" value="${esc(u?u.email:'')}" inputmode="email" autocomplete="off"></div>
+      <div><label>Nome</label><input id="uf_nome" value="${esc(u&&u.nome||'')}"></div>
+      <div><label>Perfil de acesso</label><select id="uf_perfil">${ACS.perfis.map(p=>`<option value="${p.id}" ${u&&u.perfil_id===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
+      <div><label>Situação</label><select id="uf_ativo"><option value="1">Ativo</option><option value="0" ${u&&!u.ativo?'selected':''}>Inativo (sem acesso)</option></select></div>
+    </div><p class="small resumo-perm" id="uf_resumo"></p></div>
+    <div class="modal-rod">${u?'<a href="#" class="small err" id="uf_excluir">Excluir usuário</a>':''}<span class="small" id="uf_st"></span><span class="esp"></span>
+      <button class="btn btn2" data-fechar>Cancelar</button><button class="btn" id="uf_salvar">Salvar</button></div>`);
+  const nomes=Object.fromEntries(ACS.catalogo.map(c=>[c.chave,c.nome]));
+  const resumo=()=>{ const p=ACS.perfis.find(x=>x.id===+$('uf_perfil').value); $('uf_resumo').textContent=p?'Este perfil libera: '+(p.sistema?'tudo, inclusive usuários e perfis.':(p.permissoes.map(k=>nomes[k]).join(' · ')||'nada.')):''; };
+  $('uf_perfil').onchange=resumo; resumo();
   $('uf_salvar').onclick=async()=>{ $('uf_salvar').disabled=true;
     try{ ACS=await postJSON('/api/admin/usuarios',{email_original:u?u.email:null,email:$('uf_email').value,nome:$('uf_nome').value,perfil_id:+$('uf_perfil').value,ativo:$('uf_ativo').value==='1'});
-      el.innerHTML=''; desenharAcesso(); }
+      fecharModal(); desenharAcesso(); }
     catch(e){ $('uf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; $('uf_salvar').disabled=false; } };
   if(u) $('uf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o usuário ${u.email}? Para só bloquear o acesso, prefira marcar como inativo.`)) return;
-    try{ ACS=await api('/api/admin/usuarios?email='+encodeURIComponent(u.email),{method:'DELETE'}); el.innerHTML=''; desenharAcesso(); }
+    try{ ACS=await api('/api/admin/usuarios?email='+encodeURIComponent(u.email),{method:'DELETE'}); fecharModal(); desenharAcesso(); }
     catch(err){ $('uf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
-  $('uf_email').focus(); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  $('uf_email').focus();
 }
-function formPerfil(p,el){
-  const grupos=[...new Set(ACS.catalogo.map(c=>c.grupo))], tem=k=>p?(p.sistema||p.permissoes.includes(k)):false;
-  el.innerHTML=`<div class="ufrm"><div class="full"><b>${p?'Editar perfil':'Novo perfil'}</b></div>
-    <div><label>Nome</label><input id="pf_nome" value="${esc(p?p.nome:'')}" maxlength="60"></div>
-    <div><label>Descrição</label><input id="pf_desc" value="${esc(p&&p.descricao||'')}" maxlength="200"></div>
-    <div class="full">${p&&p.sistema?'<p class="small">O perfil Administrador sempre tem todas as permissões. Só o nome e a descrição podem ser alterados.</p>':''}
-      <div class="perms">${grupos.map(g=>`<h4>${esc(g)}</h4>`+ACS.catalogo.filter(c=>c.grupo===g).map(c=>`<label><input type="checkbox" value="${c.chave}" ${tem(c.chave)?'checked':''} ${p&&p.sistema?'disabled':''}> ${esc(c.nome)}</label>`).join('')).join('')}</div></div>
-    <div class="acoes"><button class="btn" id="pf_salvar">Salvar</button><button class="btn btn2" id="pf_cancelar">Cancelar</button>${p&&!p.sistema?'<span style="flex:1"></span><a href="#" class="small err" id="pf_excluir">excluir perfil</a>':''}<span class="small" id="pf_st"></span></div></div>`;
-  const q=c=>el.querySelector(c);
-  q('#pf_cancelar').onclick=()=>{ if(p) el.innerHTML=''; else el.remove(); };
-  q('#pf_salvar').onclick=async()=>{ q('#pf_salvar').disabled=true;
-    try{ ACS=await postJSON('/api/admin/perfis',{id:p?p.id:null,nome:q('#pf_nome').value,descricao:q('#pf_desc').value,permissoes:[...el.querySelectorAll('.perms input:checked')].map(i=>i.value)});
-      desenharAcesso(); }
-    catch(e){ q('#pf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; q('#pf_salvar').disabled=false; } };
-  if(p&&!p.sistema) q('#pf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o perfil "${p.nome}"?`)) return;
-    try{ ACS=await api('/api/admin/perfis/'+p.id,{method:'DELETE'}); desenharAcesso(); }catch(err){ q('#pf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
-  q('#pf_nome').focus();
+function formPerfil(p){
+  const sis=p&&p.sistema, tem=k=>p?(p.sistema||p.permissoes.includes(k)):false;
+  const grupo=g=>`<div class="pgrupo" data-g="${esc(g)}"><div class="tit">${esc(g)}${sis?'':'<a href="#" data-todos>marcar todos</a>'}</div>
+    ${ACS.catalogo.filter(c=>c.grupo===g).map(c=>`<label class="perm ${tem(c.chave)?'on':''}"><input type="checkbox" value="${c.chave}" ${tem(c.chave)?'checked':''} ${sis?'disabled':''}><span>${esc(c.nome)}</span>${c.ajuda?`<small>${esc(c.ajuda)}</small>`:''}</label>`).join('')}</div>`;
+  abrirModal(`<div class="modal-cab"><h2>${p?'Editar perfil':'Novo perfil'}</h2><button class="x" data-fechar aria-label="Fechar">×</button></div>
+    <div class="modal-corpo"><div class="campos2">
+      <div><label>Nome do perfil</label><input id="pf_nome" value="${esc(p?p.nome:'')}" maxlength="60" placeholder="ex.: Financeiro"></div>
+      <div><label>Descrição</label><input id="pf_desc" value="${esc(p&&p.descricao||'')}" maxlength="200" placeholder="para que serve este perfil"></div></div>
+      ${sis?'<p class="small" style="margin-top:12px">O perfil Administrador tem sempre todas as permissões. Só o nome e a descrição podem ser alterados.</p>':''}
+      <div class="grp-perm"><div class="col">${grupo('Menus')}</div><div class="col">${grupo('Ações')}${grupo('Administração')}</div></div></div>
+    <div class="modal-rod">${p&&!sis?`<a href="#" class="small err" id="pf_excluir">Excluir perfil</a>`:''}<span class="small" id="pf_st"></span><span class="esp"></span>
+      <span class="small resumo-perm" id="pf_conta"></span><button class="btn btn2" data-fechar>Cancelar</button><button class="btn" id="pf_salvar">Salvar</button></div>`);
+  const M=$('modal'), conta=()=>{ const n=M.querySelectorAll('.grp-perm input:checked').length; $('pf_conta').textContent=sis?'':`${n} de ${ACS.catalogo.length} permissões`; };
+  M.querySelectorAll('.grp-perm input').forEach(i=>i.onchange=()=>{ i.closest('label').classList.toggle('on',i.checked); conta(); });
+  M.querySelectorAll('[data-todos]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const L=[...a.closest('.pgrupo').querySelectorAll('input')], marcar=L.some(i=>!i.checked);
+    L.forEach(i=>{ i.checked=marcar; i.closest('label').classList.toggle('on',marcar); }); a.textContent=marcar?'desmarcar todos':'marcar todos'; conta(); });
+  conta();
+  $('pf_salvar').onclick=async()=>{ $('pf_salvar').disabled=true;
+    try{ ACS=await postJSON('/api/admin/perfis',{id:p?p.id:null,nome:$('pf_nome').value,descricao:$('pf_desc').value,permissoes:[...M.querySelectorAll('.grp-perm input:checked')].map(i=>i.value)});
+      fecharModal(); desenharAcesso(); }
+    catch(e){ $('pf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; $('pf_salvar').disabled=false; } };
+  if(p&&!sis) $('pf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o perfil "${p.nome}"?`)) return;
+    try{ ACS=await api('/api/admin/perfis/'+p.id,{method:'DELETE'}); fecharModal(); desenharAcesso(); }catch(err){ $('pf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
+  $('pf_nome').focus();
 }
 
 // ---------- Configurações: empresa remetente ----------

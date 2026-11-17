@@ -6,21 +6,21 @@
 
 // Catálogo de permissões (a chave é o que fica gravado no perfil).
 export const PERMISSOES = [
-  { chave: 'menu.calc', grupo: 'Menus', nome: 'Calcular frete' },
-  { chave: 'menu.bling', grupo: 'Menus', nome: 'Bling: pedidos, propostas, notas fiscais e produtos' },
-  { chave: 'menu.mkt', grupo: 'Menus', nome: 'Resultado no marketplace' },
-  { chave: 'menu.hist', grupo: 'Menus', nome: 'Histórico de cotações' },
-  { chave: 'menu.div', grupo: 'Menus', nome: 'Divergências' },
-  { chave: 'menu.tab', grupo: 'Menus', nome: 'Tabelas de frete' },
-  { chave: 'menu.integ', grupo: 'Menus', nome: 'Integrações (APIs)' },
-  { chave: 'menu.cfg', grupo: 'Menus', nome: 'Empresa remetente' },
-  { chave: 'menu.json', grupo: 'Menus', nome: 'Modelo de dados' },
-  { chave: 'acao.salvar_cotacao', grupo: 'Ações', nome: 'Salvar cotações' },
-  { chave: 'acao.valor_manual', grupo: 'Ações', nome: 'Registrar e remover valores manuais' },
-  { chave: 'acao.bling_sincronizar', grupo: 'Ações', nome: 'Sincronizar e reconectar o Bling' },
-  { chave: 'acao.integracoes', grupo: 'Ações', nome: 'Ligar, desligar e testar integrações' },
-  { chave: 'acao.configuracoes', grupo: 'Ações', nome: 'Alterar empresa remetente e itens com valor fixo' },
-  { chave: 'admin.usuarios', grupo: 'Administração', nome: 'Cadastrar usuários e perfis de acesso' },
+  { chave: 'menu.calc', ajuda: 'Calculadora de frete e busca de pedido, proposta ou NF', grupo: 'Menus', nome: 'Calcular frete' },
+  { chave: 'menu.bling', ajuda: 'Listas de pedidos, propostas, notas e produtos importados', grupo: 'Menus', nome: 'Bling: pedidos, propostas, notas fiscais e produtos' },
+  { chave: 'menu.mkt', ajuda: 'Quanto a empresa recebe por produto no Mercado Livre e outros', grupo: 'Menus', nome: 'Resultado no marketplace' },
+  { chave: 'menu.hist', ajuda: 'Cotações salvas e o detalhe de cada uma', grupo: 'Menus', nome: 'Histórico de cotações' },
+  { chave: 'menu.div', ajuda: 'Comparação entre valor calculado, valor manual e cotação online', grupo: 'Menus', nome: 'Divergências' },
+  { chave: 'menu.tab', ajuda: 'Consulta das tabelas de frete carregadas', grupo: 'Menus', nome: 'Tabelas de frete' },
+  { chave: 'menu.integ', ajuda: 'Situação das APIs das transportadoras', grupo: 'Menus', nome: 'Integrações (APIs)' },
+  { chave: 'menu.cfg', ajuda: 'CNPJ e CEP de origem das cotações online', grupo: 'Menus', nome: 'Empresa remetente' },
+  { chave: 'menu.json', ajuda: 'Estrutura técnica dos dados', grupo: 'Menus', nome: 'Modelo de dados' },
+  { chave: 'acao.salvar_cotacao', ajuda: 'Gravar a cotação no histórico', grupo: 'Ações', nome: 'Salvar cotações' },
+  { chave: 'acao.valor_manual', ajuda: 'Informar o valor cotado direto com a transportadora', grupo: 'Ações', nome: 'Registrar e remover valores manuais' },
+  { chave: 'acao.bling_sincronizar', ajuda: 'Importar agora e refazer a conexão com o Bling', grupo: 'Ações', nome: 'Sincronizar e reconectar o Bling' },
+  { chave: 'acao.integracoes', ajuda: 'Usar cotação online e testar conexão', grupo: 'Ações', nome: 'Ligar, desligar e testar integrações' },
+  { chave: 'acao.configuracoes', ajuda: 'Salvar empresa remetente e itens com valor fixo', grupo: 'Ações', nome: 'Alterar empresa remetente e itens com valor fixo' },
+  { chave: 'admin.usuarios', ajuda: 'Tela Usuários e perfis (incluir, bloquear, alterar acessos)', grupo: 'Administração', nome: 'Cadastrar usuários e perfis de acesso' },
 ];
 const CHAVES = new Set(PERMISSOES.map((p) => p.chave));
 const TODAS = PERMISSOES.map((p) => p.chave);
