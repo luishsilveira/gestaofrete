@@ -641,12 +641,28 @@ $('cp').onclick=()=>navigator.clipboard.writeText(JSON.stringify(TABELAS,null,1)
 const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):'';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
-  if(!r.ok) throw Object.assign(new Error((j&&j.erro)||('HTTP '+r.status)),{codigo:j&&j.codigo,status:r.status}); return j; }
+  if(!r.ok){ const e=Object.assign(new Error((j&&j.erro)||('HTTP '+r.status)),{codigo:j&&j.codigo,status:r.status});
+    if(['nao_cadastrado','inativo'].includes(e.codigo)) bloquear(e.message); else if(e.codigo==='sem_permissao') setTimeout(reverPermissoes,0);
+    throw e; } return j; }
+// Usuário bloqueado ou removido: tela de acesso não autorizado, mesmo com a página já aberta.
+function bloquear(msg){ $('bloqueio_msg').textContent=msg; $('bloqueio').classList.remove('hide'); $('menu').classList.add('hide'); $('conteudo').classList.add('hide'); }
+// Permissões do perfil conferidas de novo a cada 2 minutos e quando o servidor recusa algo: o menu acompanha o que o administrador mudar.
+async function reverPermissoes(){
+  if(!API_OK) return;
+  try{ const j=await fetch('/api/eu').then(r=>r.json().then(d=>({ok:r.ok,d})));
+    if(!j.ok){ if(['nao_cadastrado','inativo'].includes(j.d&&j.d.codigo)) bloquear(j.d.erro); return; }
+    const novo=(j.d.permissoes||[]).join();
+    if(novo!==(PERM||[]).join()){ PERM=j.d.permissoes; $('usuario').innerHTML=`${esc(j.d.nome||j.d.usuario)}<br><span>${esc(j.d.perfil||'')}</span>`; aplicarPermissoes(); calc();
+      const p=location.hash.slice(1)||'calc'; if(!podePagina(p)) irPara(primeiraPagina()); }
+  }catch(e){}
+}
+setInterval(reverPermissoes,120000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reverPermissoes(); });
 api('/api/eu').then(async j=>{ API_OK=true; PERM=j.permissoes||[];
     $('usuario').innerHTML=`${esc(j.nome||j.usuario)}<br><span>${esc(j.perfil||'')}</span>`; aplicarPermissoes(); calc(); await iniciarBling(); aplicarPermissoes(); iniciarOnline();
     const p=location.hash.slice(1)||'calc'; irPara(podePagina(p)?p:primeiraPagina()); })
   .catch(e=>{ API_OK=false;
-    if(['nao_cadastrado','inativo','nao_identificado'].includes(e.codigo)){ $('bloqueio_msg').textContent=e.message; $('bloqueio').classList.remove('hide'); $('menu').classList.add('hide'); $('conteudo').classList.add('hide'); } });
+    if(['nao_cadastrado','inativo','nao_identificado'].includes(e.codigo)) bloquear(e.message); });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
   const b=$('s_btn'); b.disabled=true; $('s_status').className='small';
