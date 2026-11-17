@@ -10,6 +10,7 @@
 
 const num = (v) => { const n = +v; return Number.isFinite(n) ? n : 0; };
 const r2 = (v) => Math.round(v * 100) / 100;
+const r4 = (v) => Math.round(v * 10000) / 10000;
 
 export async function lerFixos(db) {
   const r = await db.query(`SELECT valor FROM app_config WHERE chave = 'valores_fixos'`);
@@ -139,11 +140,11 @@ export async function analisarMarketplace(db, opcoes = {}) {
   const produtos = [...porProduto.values()].map((g) => ({
     id: g.id, codigo: g.codigo, nome: g.nome, fixo: g.fixo, pedidos: g.pedidos.size, qtd: g.qtd, peso: Math.round(g.peso * 1000) / 1000,
     valor: r2(g.valor), porUnidade: g.qtd > 0 ? Math.round(g.valor / g.qtd * 10000) / 10000 : null,
-    porKg: g.peso > 0 ? r2(g.valor / g.peso) : null, preco: g.preco,
+    porKg: g.peso > 0 ? r4(g.valor / g.peso) : null, preco: g.preco,
     pctPreco: g.preco > 0 && g.qtd > 0 ? Math.round(g.valor / g.qtd / g.preco * 1000) / 10 : null,
   })).sort((a, b) => b.valor - a.valor);
   const anuncios = [...porAnuncio.values()].map((a) => ({ ...a, total: r2(a.total), liquido: r2(a.liquido), peso: Math.round(a.peso * 1000) / 1000,
-    liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.peso > 0 ? r2(a.liquido / a.peso) : null,
+    liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.peso > 0 ? r4(a.liquido / a.peso) : null,
     pctRecebido: a.total > 0 ? Math.round(a.liquido / a.total * 1000) / 10 : null })).sort((a, b) => b.liquido - a.liquido);
 
   if (nomesSemPeso.size) avisos.add(`Sem peso cadastrado no Bling (ficam fora do rateio pelo peso; configure como valor fixo ou cadastre o peso): ${[...nomesSemPeso].slice(0, 8).join('; ')}${nomesSemPeso.size > 8 ? '…' : ''}.`);
@@ -151,7 +152,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
   if (!fixos.length) avisos.add('Nenhum componente com valor fixo configurado (ex.: lacre a R$ 0,18): tudo é rateado pelo peso.');
   for (const k of ['total', 'comissao', 'frete', 'ipi', 'liquido', 'base']) resumo[k] = r2(resumo[k]);
   resumo.peso = Math.round(resumo.peso * 1000) / 1000;
-  resumo.porKg = resumo.peso > 0 ? r2(resumo.base / resumo.peso) : null;
+  resumo.porKg = resumo.peso > 0 ? r4(resumo.base / resumo.peso) : null;
   resumo.pctRetido = resumo.total > 0 ? Math.round((resumo.comissao + resumo.frete) / resumo.total * 1000) / 10 : null;
 
   return { periodo: { de, ate }, canal, descontarIpi, resumo, produtos, anuncios, pedidos: linhasPedidos, fixos, avisos: [...avisos] };

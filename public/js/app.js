@@ -475,6 +475,7 @@ function desenharMkt(){
   const pc=v=>r.total>0?(v/r.total*100):0;
   const fatias=[['Comissão',r.comissao,'f-com'],['Frete',r.frete,'f-fre'],...(d.descontarIpi?[['IPI',r.ipi,'f-ipi']]:[]),['Mercadoria',r.base,'f-mer']];
   const kpi=(t,v,sub='')=>`<div class="kpi"><span>${t}</span><b>${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
+  const rs4=v=>'R$ '+n2(v,4);
   const maxKg=Math.max(...d.produtos.filter(p=>!p.fixo).map(p=>p.porKg||0),0.01);
   $('m_out').innerHTML=`
   ${d.avisos.length?`<div class="mkt-aviso small">${d.avisos.map(a=>'• '+esc(a)).join('<br>')}</div>`:''}
@@ -485,7 +486,7 @@ function desenharMkt(){
     ${kpi('Líquido a receber',brl(r.liquido))}
     ${kpi(d.descontarIpi?'Mercadoria (sem IPI)':'Mercadoria',brl(r.base),`${n2(pc(r.base),1)}% do vendido`)}
     ${kpi('Peso vendido',n2(r.peso,1)+' kg')}
-    ${kpi('Recebido por kg',r.porKg!=null?brl(r.porKg):'—','mercadoria ÷ peso')}
+    ${kpi('Recebido por kg',r.porKg!=null?rs4(r.porKg):'—','mercadoria ÷ peso')}
   </div>
   <div class="card"><h2>De cada R$ 100 vendidos no ${esc(canal)}</h2>
     <div class="faixa-leg small">${fatias.map(([n,v,c])=>`<span><i class="${c}"></i>${n}: R$ ${n2(pc(v))} (${brl(v)})</span>`).join('')}</div>
@@ -495,13 +496,13 @@ function desenharMkt(){
     <div class="tbl-wrap"><table><tr><th>Código</th><th>Produto</th><th class="n">Pedidos</th><th class="n">Quantidade</th><th class="n">Peso</th><th class="n">Recebido</th><th class="n">Por unidade</th><th>Por kg</th><th class="n">Preço cadastro</th><th class="n">% do preço</th></tr>
     ${d.produtos.map(p=>`<tr><td>${esc(p.codigo||'')}</td><td>${esc(p.nome||'')}${p.fixo?' <span class="badge b-tab">valor fixo</span>':''}</td><td class="n">${p.pedidos}</td><td class="n">${n2(p.qtd,0)}</td>
       <td class="n">${p.peso>0?n2(p.peso,2)+' kg':'<span class="aviso">sem peso</span>'}</td><td class="n">${brl(p.valor)}</td><td class="n">${p.porUnidade!=null?'R$ '+n2(p.porUnidade,4):'—'}</td>
-      <td class="barra">${p.porKg!=null&&!p.fixo?`<div><i style="width:${Math.round(p.porKg/maxKg*100)}%"></i></div><span>${brl(p.porKg)}</span>`:'—'}</td>
+      <td class="barra">${p.porKg!=null&&!p.fixo?`<div><i style="width:${Math.round(p.porKg/maxKg*100)}%"></i></div><span>${rs4(p.porKg)}</span>`:'—'}</td>
       <td class="n">${p.preco!=null?'R$ '+n2(p.preco,4):'—'}</td><td class="n ${p.pctPreco!=null&&p.pctPreco<100?'dif-pos':''}">${p.pctPreco!=null?n2(p.pctPreco,1)+'%':'—'}</td></tr>`).join('')}</table></div></div>
   <div class="card"><h2>Por anúncio (produto vendido)</h2>
     <div class="tbl-wrap"><table><tr><th>Código</th><th>Produto vendido</th><th class="n">Vendas</th><th class="n">Qtd.</th><th class="n">Vendido</th><th class="n">Recebido (mercadoria)</th><th class="n">% recebido</th><th class="n">Recebido por unidade</th><th class="n">Peso</th><th class="n">Por kg</th></tr>
     ${d.anuncios.map(a=>`<tr><td>${esc(a.codigo||'')}</td><td>${esc(a.nome||'')}${a.kit?' <span class="canal canal-mk">kit</span>':''}</td><td class="n">${a.vendas}</td><td class="n">${n2(a.qtd,0)}</td>
       <td class="n">${brl(a.total)}</td><td class="n">${brl(a.liquido)}</td><td class="n">${a.pctRecebido!=null?n2(a.pctRecebido,1)+'%':'—'}</td><td class="n">${a.liquidoPorVenda!=null?brl(a.liquidoPorVenda):'—'}</td>
-      <td class="n">${a.peso>0?n2(a.peso,2)+' kg':'—'}</td><td class="n">${a.porKg!=null?brl(a.porKg):'—'}</td></tr>`).join('')}</table></div></div>
+      <td class="n">${a.peso>0?n2(a.peso,2)+' kg':'—'}</td><td class="n">${a.porKg!=null?rs4(a.porKg):'—'}</td></tr>`).join('')}</table></div></div>
   <div class="card"><div class="hist-top"><h2 style="margin:0">Pedidos (${d.pedidos.length})</h2><span style="flex:1"></span><button class="btn btn2 btn-mini" id="m_xlsx">Exportar Excel</button><button class="btn btn2 btn-mini" id="m_csv2">Exportar CSV</button></div>
     <p class="small">Clique num pedido para ver o rateio por componente.${d.pedidos.length>500?' Mostrando os 500 mais recentes; a exportação traz todos.':''} O Excel tem duas abas: Pedidos e Rateio por componente.</p>
     <div class="tbl-wrap"><table id="m_ped"><tr><th>Nº</th><th>Nº loja</th><th>Data</th><th>Cliente</th><th class="n" title="Valor base no marketplace (o que o comprador pagou)">Vendido</th><th class="n">Comissão</th><th class="n">Frete</th><th class="n">IPI</th><th class="n">Líquido</th><th class="n">Mercadoria</th></tr>
@@ -512,15 +513,15 @@ function desenharMkt(){
     const p=d.pedidos[+tr.dataset.i];
     tr.insertAdjacentHTML('afterend',`<tr class="comp"><td></td><td colspan="9">${p.aviso?`<span class="small aviso">${esc(p.aviso)}</span>`:`<table class="mini"><tr><th>Componente</th><th class="n">Qtd.</th><th class="n">Peso</th><th>Rateio</th><th class="n">Recebido</th><th class="n">Por unidade</th><th class="n">Por kg</th></tr>
       ${p.componentes.map(c=>`<tr><td>${esc(c.codigo||'')} ${esc(c.nome||'')}</td><td class="n">${n2(c.qtd,0)}</td><td class="n">${c.peso>0?n2(c.peso,3)+' kg':'—'}</td><td class="small">${c.rateio==='fixo'?'valor fixo':c.rateio==='peso'?'pelo peso':c.rateio==='sem peso'?'<span class="aviso">sem peso: fora do rateio</span>':'pela quantidade'}</td>
-        <td class="n">${brl(c.valor)}</td><td class="n">${c.qtd>0?'R$ '+n2(c.valor/c.qtd,4):'—'}</td><td class="n">${c.peso>0&&!c.fixo?brl(c.valor/c.peso):'—'}</td></tr>`).join('')}</table>`}</td></tr>`); });
+        <td class="n">${brl(c.valor)}</td><td class="n">${c.qtd>0?'R$ '+n2(c.valor/c.qtd,4):'—'}</td><td class="n">${c.peso>0&&!c.fixo?rs4(c.valor/c.peso):'—'}</td></tr>`).join('')}</table>`}</td></tr>`); });
   const nomeArq=ext=>`resultado-${d.canal==='marketplace'?'marketplaces':d.canal}-${d.periodo.de}-a-${d.periodo.ate}.${ext}`;
-  const colsPed=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',34],['Situação',16],['Vendido (base marketplace)',14,'brl'],['Total no Bling',14,'brl'],['Comissão',12,'brl'],['Frete marketplace',12,'brl'],['IPI',10,'brl'],['Líquido a receber',14,'brl'],['Mercadoria',14,'brl'],['% recebido',10,'pct'],['Peso (kg)',10,'kg'],['Mercadoria por kg',12,'brl']];
+  const colsPed=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',34],['Situação',16],['Vendido (base marketplace)',14,'brl'],['Total no Bling',14,'brl'],['Comissão',12,'brl'],['Frete marketplace',12,'brl'],['IPI',10,'brl'],['Líquido a receber',14,'brl'],['Mercadoria',14,'brl'],['% recebido',10,'pct'],['Peso (kg)',10,'kg'],['Mercadoria por kg',12,'num4']];
   const linPed=d.pedidos.map(p=>{ const peso=p.componentes.reduce((s,c)=>s+(+c.peso||0),0);
-    return [p.numero,p.numero_loja||'',String(p.data).slice(0,10),p.cliente||'',p.situacao||'',+p.total,+p.total_bling||null,+p.comissao,+p.frete,+p.ipi,p.liquido,p.base,+p.total?Math.round(p.base/+p.total*1000)/10:null,peso?Math.round(peso*1000)/1000:null,peso?Math.round(p.base/peso*100)/100:null]; });
-  const colsComp=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',30],['Item vendido',14],['Código componente',16],['Componente',40],['Quantidade',10,'int'],['Peso (kg)',10,'kg'],['Rateio',14],['Recebido',12,'brl'],['Recebido por unidade',14,'num4'],['Recebido por kg',12,'brl']];
+    return [p.numero,p.numero_loja||'',String(p.data).slice(0,10),p.cliente||'',p.situacao||'',+p.total,+p.total_bling||null,+p.comissao,+p.frete,+p.ipi,p.liquido,p.base,+p.total?Math.round(p.base/+p.total*1000)/10:null,peso?Math.round(peso*1000)/1000:null,peso?Math.round(p.base/peso*10000)/10000:null]; });
+  const colsComp=[['Pedido',10],['Nº loja',20],['Data',11,'data'],['Cliente',30],['Item vendido',14],['Código componente',16],['Componente',40],['Quantidade',10,'int'],['Peso (kg)',10,'kg'],['Rateio',14],['Recebido',12,'brl'],['Recebido por unidade',14,'num4'],['Recebido por kg',12,'num4']];
   const linComp=[]; d.pedidos.forEach(p=>p.componentes.forEach(c=>linComp.push([p.numero,p.numero_loja||'',String(p.data).slice(0,10),p.cliente||'',c.item||'',c.codigo||'',c.nome||'',+c.qtd,c.peso?Math.round(c.peso*1000)/1000:null,
-    {fixo:'valor fixo',peso:'pelo peso','sem peso':'sem peso',quantidade:'pela quantidade'}[c.rateio]||c.rateio,c.valor,c.qtd?Math.round(c.valor/c.qtd*10000)/10000:null,c.peso&&!c.fixo?Math.round(c.valor/c.peso*100)/100:null])));
-  const colsProd=[['Código',14],['Produto',40],['Valor fixo',9],['Pedidos',9,'int'],['Quantidade',11,'int'],['Peso (kg)',11,'kg'],['Recebido',13,'brl'],['Por unidade',12,'num4'],['Por kg',11,'brl'],['Preço cadastro',13,'num4'],['% do preço',10,'pct']];
+    {fixo:'valor fixo',peso:'pelo peso','sem peso':'sem peso',quantidade:'pela quantidade'}[c.rateio]||c.rateio,c.valor,c.qtd?Math.round(c.valor/c.qtd*10000)/10000:null,c.peso&&!c.fixo?Math.round(c.valor/c.peso*10000)/10000:null])));
+  const colsProd=[['Código',14],['Produto',40],['Valor fixo',9],['Pedidos',9,'int'],['Quantidade',11,'int'],['Peso (kg)',11,'kg'],['Recebido',13,'brl'],['Por unidade',12,'num4'],['Por kg',11,'num4'],['Preço cadastro',13,'num4'],['% do preço',10,'pct']];
   const linProd=d.produtos.map(p=>[p.codigo||'',p.nome||'',p.fixo?'sim':'',p.pedidos,p.qtd,p.peso||null,p.valor,p.porUnidade,p.porKg,p.preco,p.pctPreco]);
   $('m_xlsx').onclick=()=>baixarXLSX(nomeArq('xlsx'),[{nome:'Pedidos',cols:colsPed,linhas:linPed},{nome:'Rateio por componente',cols:colsComp,linhas:linComp},{nome:'Por produto',cols:colsProd,linhas:linProd}]);
   $('m_csv2').onclick=()=>baixarCSV(nomeArq('csv'),colsPed,linPed);
