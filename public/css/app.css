@@ -234,3 +234,21 @@ label.perm.on{background:#f4f8e8}
 label.perm input:disabled+span{color:var(--mut)}
 .resumo-perm{font-size:12px;color:var(--mut)}
 @media(max-width:700px){.grp-perm,.campos2{grid-template-columns:1fr}}
+
+/* progresso das cotações (tabelas + online) */
+.progresso{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-bottom:12px}
+.progresso.hide{display:none}
+.progresso .pg-txt{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);margin-bottom:8px;flex-wrap:wrap}
+.progresso .pg-txt b{font-weight:700}
+.progresso .pg-txt .esp{flex:1}
+.progresso .pg-txt .pend{color:var(--mut)}
+.progresso .pg-barra{height:6px;background:#e9edf2;border-radius:3px;overflow:hidden}
+.progresso .pg-barra i{display:block;height:100%;background:var(--azul);border-radius:3px;transition:width .35s ease}
+.progresso.ok .pg-barra i{background:var(--lima)}
+.progresso .gira{width:14px;height:14px;border:2px solid #cfd8e3;border-top-color:var(--azul);border-radius:50%;animation:gira .8s linear infinite;flex:none}
+.progresso.ok .gira{display:none}
+.progresso .marca-ok{display:none;color:var(--ok);font-weight:700}
+.progresso.ok .marca-ok{display:inline}
+@keyframes gira{to{transform:rotate(360deg)}}
+.chip-pend{display:inline-flex;align-items:center;gap:5px;background:var(--accs);color:var(--azul);border-radius:12px;padding:1px 9px;font-size:12px}
+.chip-erro{display:inline-flex;background:var(--warns);color:var(--warn);border-radius:12px;padding:1px 9px;font-size:12px}

@@ -190,7 +190,8 @@ async function cotarUma(env, db, integ, req, usuario, { fetchImpl = fetch, semCa
 // Cota em todas as integrações ativas, em paralelo.
 export async function cotarOnline(env, db, d, usuario, fetchImpl = fetch) {
   const estado = await estadoIntegracoes(db);
-  const ativas = (await todasIntegracoes(env, db)).filter((i) => !i.erroConfig && (estado[i.id] || {}).ativa !== false);
+  // d.integracao: cota só nessa integração (a tela faz uma chamada por transportadora para mostrar o progresso)
+  const ativas = (await todasIntegracoes(env, db)).filter((i) => !i.erroConfig && (estado[i.id] || {}).ativa !== false && (!d.integracao || i.id === d.integracao));
   if (!ativas.length) return { remetente: null, resultados: [] };
   const rem = await remetenteAtual(env, db, fetchImpl);
   const req = normalizarPedido(d, rem);

@@ -207,11 +207,12 @@ function calc(){
     if(t.id==='tjb') op.int=/interior/i.test(r.regiao);
     const pT=ptDe(t); res.push({t,r,rv,pT,...cotar(t,r,pT,nf,uf,op,rv)}); });
   // Cotação online: vale o valor da API; a tabela só entra quando a API não responde (as duas ficam registradas).
+  const nBase=res.length+nao.length; // transportadoras calculadas pela tabela (antes de juntar as online)
   const onReq=ONL.integ.length?reqOnline(peso,nf,m3):null, onChave=onReq?JSON.stringify(onReq):null;
-  if(onReq){ const x=ONL.res&&ONL.res.chave===onChave?ONL.res:null, pend=ONL.pend===onChave;
+  if(onReq){ const x=ONL.atual&&ONL.atual.chave===onChave?ONL.atual:null;
     for(const ig of ONL.integ){
       const ib=ig.tabela?res.findIndex(r=>r.t.id===ig.tabela):-1, tb=ib>=0?res[ib]:null;
-      const o=x&&x.ok?x.resultados.find(r=>r.integracao===ig.id):null;
+      const o=x?x.resultados[ig.id]:null, pend=!x||x.pend.has(ig.id);
       if(o&&o.ok){
         const on={t:tb?tb.t:(TABELAS.find(t=>t.id===ig.tabela)||{id:'api-'+ig.id,transportadora:o.transportadora}),r:{regiao:'cotação online',prazo:o.prazo},
           rv:{prazo:o.prazo,txt:'online',fonte:'api'},pT:pt,total:o.total,sub:o.total,icms:0,al:0,api:true,
@@ -220,7 +221,7 @@ function calc(){
             tb?[{n:'Diferença para a tabela (só informativo)',d:`pela tabela: ${brl(tb.total)} (praça ${tb.r.regiao})`,v:o.total-tb.total}]:[])};
         if(ib>=0) res.splice(ib,1,on); else { res.push(on); const k=nao.findIndex(n=>n.t.id===ig.tabela); if(k>=0) nao.splice(k,1); }
       } else if(tb){
-        const erro=o?o.erro:(x&&!x.ok?x.erro:(pend?'consulta online em andamento':'sem resposta da API'));
+        const erro=o&&!o.ok?o.erro:(pend?'consulta online em andamento':'sem resposta da API');
         tb.on={fonte:'tabela',online:null,tabela:+tb.total.toFixed(2),praca_tabela:tb.r.regiao,id:null,prazo:null,erro};
       }
     }
@@ -228,6 +229,7 @@ function calc(){
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
   if(onReq) agendarOnline(onReq,onChave);
+  desenharProgresso(onReq?onChave:null,nBase);
   $('salvar').classList.toggle('hide',!res.length||!API_OK||!pode('acao.salvar_cotacao'));
   { const sel=$('s_transp'), ant=sel.value;
     sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
@@ -279,7 +281,9 @@ document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','doc_dest'].forEach(id=>$(id).addEventListener('input',calc));
 
 // ---------- Cotação online nas transportadoras (API) ----------
-const ONL={integ:[],res:null,pend:null,timer:null};
+// Cada transportadora com API é consultada numa chamada própria, em paralelo: a tela acompanha uma a uma.
+// ONL.atual = { chave, resultados: {id: resultado}, pend: Set(ids em andamento), ini, fim, remetente, destinatarioGenerico }
+const ONL={integ:[],atual:null,timer:null};
 function reqOnline(peso,nf,m3){
   const cep=String(dest.cep||'').replace(/\D/g,'').padStart(8,'0');
   if(!dest.cep||cep.length!==8||!(peso>0)||!(nf>0)) return null;
@@ -288,21 +292,40 @@ function reqOnline(peso,nf,m3){
     cubagem:c*l*a>0?[{comprimento:c,largura:l,altura:a,volumes:qv}]:[],cnpjDestinatario:$('doc_dest').value.replace(/\D/g,'')};
 }
 function agendarOnline(req,chave){
-  if((ONL.res&&ONL.res.chave===chave)||ONL.pend===chave) return;
-  clearTimeout(ONL.timer); ONL.pend=chave;
-  ONL.timer=setTimeout(async()=>{
-    let r;
-    try{ r={...await api('/api/online/cotar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(req)}),ok:true}; }
-    catch(e){ r={ok:false,erro:e.message}; }
-    if(ONL.pend!==chave) return;
-    ONL.pend=null; ONL.res={...r,chave}; calc();
-  },900);
+  if(ONL.atual&&ONL.atual.chave===chave) return;
+  clearTimeout(ONL.timer);
+  const at=ONL.atual={chave,resultados:{},pend:new Set(ONL.integ.map(i=>i.id)),ini:null,fim:null};
+  ONL.timer=setTimeout(()=>{ at.ini=Date.now();
+    for(const ig of ONL.integ){
+      api('/api/online/cotar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...req,integracao:ig.id})})
+        .then(r=>{ if(r.remetente) at.remetente=r.remetente; at.destinatarioGenerico=r.destinatarioGenerico;
+          at.resultados[ig.id]=r.resultados[0]||{ok:false,erro:'integração desativada',transportadora:ig.transportadora}; })
+        .catch(e=>{ at.resultados[ig.id]={ok:false,erro:e.message,transportadora:ig.transportadora}; })
+        .finally(()=>{ at.pend.delete(ig.id); if(!at.pend.size) at.fim=Date.now(); if(ONL.atual===at) calc(); });
+    } },900);
+}
+const onPendente=()=>!!(ONL.atual&&ONL.atual.pend.size);
+function desenharProgresso(chave,nTabelas){
+  const el=$('progresso');
+  if(!ULT||!ULT.res.length&&!ULT.nao.length){ el.classList.add('hide'); return; }
+  const x=chave&&ONL.atual&&ONL.atual.chave===chave?ONL.atual:null;
+  const online=chave?ONL.integ:[], pend=online.filter(i=>!x||x.pend.has(i.id));
+  // transportadoras: as de tabela (já calculadas) + as só online (sem tabela)
+  const total=nTabelas+online.filter(i=>!i.tabela).length, feitas=total-pend.length;
+  const falhas=x?online.filter(i=>x.resultados[i.id]&&!x.resultados[i.id].ok):[];
+  const pct=total?Math.round(feitas/total*100):100, fim=!pend.length;
+  el.classList.remove('hide'); el.classList.toggle('ok',fim);
+  el.querySelector('.pg-txt').innerHTML=`<span class="gira"></span><span class="marca-ok">✓</span>
+    <span>${fim?'Todas as cotações concluídas':'Cotando…'} <b>${feitas} de ${total}</b> (${pct}%)</span>
+    ${online.length?`<span class="small">${fim?(x&&x.fim&&x.ini?`· online em ${((x.fim-x.ini)/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})} s`:''):'· aguardando:'}</span>`:''}
+    ${pend.map(i=>`<span class="chip-pend">${esc(i.transportadora)}</span>`).join('')}
+    ${falhas.length?`<span class="esp"></span>${falhas.map(i=>`<span class="chip-erro" title="${esc(x.resultados[i.id].erro)}">${esc(i.transportadora)}: online indisponível</span>`).join('')}`:''}`;
+  el.querySelector('.pg-barra i').style.width=pct+'%';
 }
 function onStatus(chave){
   if(!ONL.integ.length||!chave) return '';
-  const x=ONL.res&&ONL.res.chave===chave?ONL.res:null; if(!x) return '';
-  if(!x.ok) return `<div class="na"><b>Cotação online</b> – ${esc(x.erro)} Valores pela tabela.</div>`;
-  const f=x.resultados.filter(r=>!r.ok);
+  const x=ONL.atual&&ONL.atual.chave===chave?ONL.atual:null; if(!x) return '';
+  const f=Object.values(x.resultados).filter(r=>!r.ok);
   return f.length?`<div class="na"><b>Cotação online indisponível</b> – ${f.map(r=>`${esc(r.transportadora)}: ${esc(r.erro)}`).join('<br>')}</div>`:'';
 }
 async function iniciarOnline(){
@@ -357,7 +380,7 @@ async function carregarIntegracoes(){
         ${pode('acao.integracoes')?`<div class="acoes"><label class="chk" style="margin:0"><input type="checkbox" data-ativa="${esc(i.id)}" ${i.ativa?'checked':''}> Usar cotação online</label>
         <button class="btn btn2 btn-mini" data-testar="${esc(i.id)}">Testar conexão</button></div>`:''}<div class="teste small" id="t_${esc(i.id)}"></div></div>`; }).join('');
     $('i_lista').querySelectorAll('[data-ativa]').forEach(c=>c.onchange=async()=>{ c.disabled=true;
-      try{ await api('/api/online/ativar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:c.dataset.ativa,ativa:c.checked})}); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+      try{ await api('/api/online/ativar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:c.dataset.ativa,ativa:c.checked})}); ONL.atual=null; await iniciarOnline(); carregarIntegracoes(); }
       catch(e){ alert('Erro: '+e.message); c.disabled=false; } });
     $('i_lista').querySelectorAll('[data-testar]').forEach(b=>b.onclick=async()=>{ const el=$('t_'+b.dataset.testar); b.disabled=true; el.textContent='Consultando (São Paulo/SP, 50 kg, NF R$ 1.000)…';
       try{ const r=await api('/api/online/testar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:b.dataset.testar})});
@@ -617,10 +640,10 @@ function formCredencial(t,e){
   const M=$('modal'), orig=e?e[t.chave]:null;
   $('cr_salvar').onclick=async()=>{ $('cr_salvar').disabled=true;
     const dados=Object.fromEntries([...M.querySelectorAll('[data-k]')].map(i=>[i.dataset.k,i.value]));
-    try{ CRED=await postJSON('/api/online/credenciais',{tipo:t.tipo,original:orig,dados}); fecharModal(); desenharCredenciais(); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+    try{ CRED=await postJSON('/api/online/credenciais',{tipo:t.tipo,original:orig,dados}); fecharModal(); desenharCredenciais(); ONL.atual=null; await iniciarOnline(); carregarIntegracoes(); }
     catch(err){ $('cr_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; $('cr_salvar').disabled=false; } };
   if(e) $('cr_excluir').onclick=async ev=>{ ev.preventDefault(); if(!confirm('Excluir estas credenciais? A integração deixa de funcionar.')) return;
-    try{ CRED=await api(`/api/online/credenciais?tipo=${t.tipo}&chave=${encodeURIComponent(orig)}`,{method:'DELETE'}); fecharModal(); desenharCredenciais(); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+    try{ CRED=await api(`/api/online/credenciais?tipo=${t.tipo}&chave=${encodeURIComponent(orig)}`,{method:'DELETE'}); fecharModal(); desenharCredenciais(); ONL.atual=null; await iniciarOnline(); carregarIntegracoes(); }
     catch(err){ $('cr_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
   const p1=M.querySelector('[data-k]'); if(p1) p1.focus();
 }
@@ -641,7 +664,7 @@ function preencherConfig(c){
 }
 $('c_salvar').onclick=async()=>{ $('c_salvar').disabled=true;
   try{ const c=await api('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cnpj:$('c_cnpj').value,cep:$('c_cep').value})});
-    preencherConfig(c); $('c_status').innerHTML='<span class="ok">Salvo.</span>'; ONL.res=null; calc(); }
+    preencherConfig(c); $('c_status').innerHTML='<span class="ok">Salvo.</span>'; ONL.atual=null; calc(); }
   catch(e){ $('c_status').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } finally{ $('c_salvar').disabled=false; } };
 
 $('tsel').innerHTML=TABELAS.map(t=>`<option value="${t.id}">${t.transportadora}</option>`).join('');
@@ -708,8 +731,8 @@ $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
   const b=$('s_btn'); b.disabled=true; $('s_status').className='small';
   // espera a cotação online terminar, para não gravar o valor da tabela por pressa
-  if(ONL.pend){ $('s_status').textContent='Aguardando a cotação online das transportadoras…';
-    for(let i=0;i<40&&ONL.pend;i++) await new Promise(r=>setTimeout(r,500));
+  if(onPendente()){ $('s_status').textContent='Aguardando a cotação online das transportadoras…';
+    for(let i=0;i<40&&onPendente();i++) await new Promise(r=>setTimeout(r,500));
     calc(); }
   $('s_status').textContent='Salvando…';
   const corpo={cliente:$('s_cliente').value.trim(),pedido:$('s_pedido').value.trim(),observacao:$('s_obs').value.trim(),
