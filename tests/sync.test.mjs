@@ -2,6 +2,7 @@
 // Requer: PostgreSQL local na porta 5499 (socket /tmp/pgt), banco "gf" vazio, e um stub do módulo "pg"
 // que use ./pgpsql.mjs (ver README, seção Testes).
 import { psql } from './pgpsql.mjs';
+import { cadastrarAdmins } from './usuarios.mjs';
 import worker from '../src/index.js';
 import { BLING, SCHEMA_BLING, definirRitmoBling } from '../src/bling.js';
 definirRitmoBling({ intervalo: 0, esperasLimite: [1, 1] });
@@ -16,6 +17,7 @@ const api = async (path, method = 'GET', body) => {
   const r = await worker.fetch(new Request('https://x.dev' + path, { method, body: body && JSON.stringify(body), headers: { 'cf-access-authenticated-user-email': 'luis@x', 'content-type': 'application/json' } }), env, ctx);
   return { status: r.status, j: await r.json() };
 };
+await cadastrarAdmins(api, 'luis@x');
 
 // ---------- Bling simulado
 const pedidos = {

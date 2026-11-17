@@ -6,6 +6,7 @@
 
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
+import { SCHEMA_ACESSO, prepararAcesso, carregarUsuario, exigir, permissaoDaRota, registrarAcesso, listarAcesso, salvarUsuario, excluirUsuario, salvarPerfil, excluirPerfil, emailDaRequisicao, AcessoErro } from './acesso.js';
 import { analisarMarketplace, lerFixos, salvarFixos, sugestoesFixos } from './marketplace.js';
 import { SCHEMA_ONLINE, MIGRAR_ONLINE, cotarOnline, testarIntegracao, statusIntegracoes, ativarIntegracao, configuracao, salvarConfiguracao } from './online.js';
 import { SCHEMA_DOCS, buscarPedido, buscarProposta, buscarNota, completarProdutos, gravarPedidos, gravarPropostas, gravarNotas, sincronizarTudo } from './sync.js';
@@ -37,14 +38,6 @@ CREATE TABLE IF NOT EXISTS cotacoes (
 );
 CREATE INDEX IF NOT EXISTS cotacoes_criado_em_idx ON cotacoes (criado_em DESC);
 `;
-
-// Quem pode ver o resultado no marketplace (valores recebidos por produto). Variável ACESSO_RESULTADO no
-// Cloudflare (e-mails separados por vírgula) substitui a lista padrão.
-const ACESSO_RESULTADO_PADRAO = ['luish.silveira@gmail.com', 'proloplasticos@gmail.com'];
-function acessoResultado(env, usuario) {
-  const lista = env.ACESSO_RESULTADO ? String(env.ACESSO_RESULTADO).split(/[,;\s]+/) : ACESSO_RESULTADO_PADRAO;
-  return lista.map((e) => e.trim().toLowerCase()).filter(Boolean).includes(String(usuario || '').trim().toLowerCase());
-}
 
 // Valores cotados fora do sistema (site, e-mail ou telefone da transportadora, CT-e) para conferir divergências.
 const SCHEMA_MANUAL = `
@@ -89,6 +82,8 @@ async function comBanco(env, ctx, fn) {
       await client.query(SCHEMA_MANUAL);
       await client.query(SCHEMA_ONLINE);
       await client.query(MIGRAR_ONLINE);
+      await client.query(SCHEMA_ACESSO);
+      await prepararAcesso(client);
       esquemaPronto = true;
     }
     return await fn(client);
@@ -504,6 +499,16 @@ async function tarefaAgendada(env, ctx) {
   });
 }
 
+// Usuário e permissões ficam 30 s em memória (por instância), para não consultar o banco a cada chamada.
+const cacheUsuarios = new Map();
+async function usuarioEmCache(env, ctx, email) {
+  const k = String(email || '').toLowerCase(), c = cacheUsuarios.get(k);
+  if (c && Date.now() - c.em < 30e3) return c.u;
+  const u = await comBanco(env, ctx, (db) => carregarUsuario(db, k));
+  cacheUsuarios.set(k, { u, em: Date.now() });
+  return u;
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(tarefaAgendada(env, ctx));
@@ -513,10 +518,32 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
 
-    const usuario = request.headers.get('cf-access-authenticated-user-email') || 'não identificado';
     try {
-      const podeResultado = acessoResultado(env, usuario);
-      if (url.pathname === '/api/eu' && request.method === 'GET') return json({ usuario, permissoes: { resultadoMarketplace: podeResultado } });
+      // quem é e o que pode: login do Cloudflare Access + cadastro de usuários e perfis (src/acesso.js)
+      const email = await emailDaRequisicao(request, env);
+      const eu = await usuarioEmCache(env, ctx, email);
+      const usuario = eu.email;
+      const precisa = permissaoDaRota(url.pathname, request.method);
+      if (precisa) exigir(eu, ...[].concat(precisa));
+      if (url.pathname === '/api/eu' && request.method === 'GET') {
+        ctx.waitUntil(comBanco(env, ctx, (db) => registrarAcesso(db, usuario)).catch(() => {}));
+        return json({ usuario, nome: eu.nome, perfil: eu.perfil, permissoes: eu.permissoes });
+      }
+      // administração de usuários e perfis
+      if (url.pathname.startsWith('/api/admin/')) {
+        const corpo = async () => { try { return await request.json(); } catch { throw new AcessoErro('Corpo da requisição inválido.', 400, 'dados'); } };
+        const r = await comBanco(env, ctx, async (db) => {
+          if (url.pathname === '/api/admin/usuarios' && request.method === 'POST') await salvarUsuario(db, await corpo(), usuario);
+          else if (url.pathname === '/api/admin/usuarios' && request.method === 'DELETE') await excluirUsuario(db, url.searchParams.get('email'), usuario);
+          else if (url.pathname === '/api/admin/perfis' && request.method === 'POST') await salvarPerfil(db, await corpo(), usuario);
+          else if (/^\/api\/admin\/perfis\/\d+$/.test(url.pathname) && request.method === 'DELETE') await excluirPerfil(db, url.pathname.split('/').pop());
+          else if (!(url.pathname === '/api/admin/acesso' && request.method === 'GET')) return null;
+          return listarAcesso(db);
+        });
+        if (!r) return json({ erro: 'Rota não encontrada.' }, 404);
+        if (request.method !== 'GET') cacheUsuarios.clear();
+        return json(r);
+      }
       if (url.pathname === '/api/cotacoes' && request.method === 'POST') return await salvarCotacao(request, env, ctx, usuario);
       if (url.pathname === '/api/cotacoes' && request.method === 'GET') return await listarCotacoes(url, env, ctx);
       if (url.pathname === '/api/bling/status') return await blingStatus(env, ctx);
@@ -553,7 +580,6 @@ export default {
         return json(await comBanco(env, ctx, (db) => testarIntegracao(env, db, String(d.id || ''), usuario)));
       }
       // resultado das vendas em marketplace (src/marketplace.js)
-      if (url.pathname.startsWith('/api/marketplace') && !podeResultado) return json({ erro: 'Acesso restrito: seu usuário não tem permissão para o resultado no marketplace.' }, 403);
       if (url.pathname === '/api/marketplace') {
         const q = url.searchParams;
         return json(await comBanco(env, ctx, (db) => analisarMarketplace(db, { de: q.get('de'), ate: q.get('ate'), canal: q.get('canal'), descontarIpi: q.get('ipi') !== '0' })));
@@ -569,6 +595,7 @@ export default {
       if (url.pathname === '/api/motivos') return json({ motivos: MOTIVOS });
       return json({ erro: 'Rota não encontrada.' }, 404);
     } catch (e) {
+      if (e instanceof AcessoErro) return json({ erro: e.message, codigo: e.codigo }, e.status);
       if (e instanceof BlingErro) return json({ erro: e.message, codigo: e.codigo }, e.status);
       if (e.status >= 400 && e.status < 500) return json({ erro: e.message }, e.status);
       console.error('Erro na API', url.pathname, e);

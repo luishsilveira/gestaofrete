@@ -189,3 +189,23 @@ a{color:var(--azul)}
 #menu a{color:#c9d3df}
 input:focus,select:focus{outline:2px solid var(--lima);outline-offset:-1px;border-color:var(--lima)}
 #menu .marca:hover{background:none}
+
+/* permissões e usuários */
+.semperm{display:none!important}
+#bloqueio{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+#bloqueio.hide{display:none}
+#bloqueio .card{max-width:520px}
+.acesso-cols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1100px){.acesso-cols{grid-template-columns:1fr}}
+.ufrm{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.ufrm .full{grid-column:1/-1}
+.ufrm .acoes{grid-column:1/-1;display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.perfil{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.perfil h3{margin:0;font-size:15px;display:flex;gap:8px;align-items:center}
+.perfil .tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.perfil .tags span{font-size:11px;background:var(--accs);color:var(--azul);padding:2px 8px;border-radius:12px}
+.perms{columns:2;column-gap:20px;margin:6px 0}
+.perms h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:10px 0 4px;break-after:avoid}
+.perms label{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:3px 0;break-inside:avoid}
+.inativo td{color:var(--mut)}
+#menu .usuario span{color:#7f93a8;font-size:11px}

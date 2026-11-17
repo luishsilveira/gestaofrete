@@ -228,7 +228,7 @@ function calc(){
   res.sort((a,b)=>a.total-b.total);
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
   if(onReq) agendarOnline(onReq,onChave);
-  $('salvar').classList.toggle('hide',!res.length||!API_OK);
+  $('salvar').classList.toggle('hide',!res.length||!API_OK||!pode('acao.salvar_cotacao'));
   { const sel=$('s_transp'), ant=sel.value;
     sel.innerHTML=res.map((x,k)=>`<option value="${k}" data-n="${x.t.transportadora}">${x.t.transportadora} – ${brl(x.total)}${k?'':' (menor preço)'}</option>`).join('');
     const k=res.findIndex(x=>x.t.transportadora===(sel.dataset.escolhida||'')); sel.value=String(k>=0?k:0); }
@@ -311,10 +311,18 @@ async function iniciarOnline(){
 
 // ---------- Navegação (menu lateral) ----------
 const TITULOS={calc:'Calcular frete','bling-pedidos':'Bling · Pedidos','bling-propostas':'Bling · Propostas','bling-notas':'Bling · Notas fiscais','bling-produtos':'Bling · Produtos',
-  hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
-const SECOES=['calc','tab','ped','hist','div','integ','cfg','json','mkt'];
+  hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',acesso:'Usuários e perfis',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
+const SECOES=['calc','tab','ped','hist','div','integ','cfg','json','mkt','acesso'];
+// ---------- Permissões do perfil do usuário (null = sem servidor: tudo liberado) ----------
+let PERM=null;
+const pode=k=>!PERM||PERM.includes(k);
+const PERM_PAGINA={calc:'menu.calc',tab:'menu.tab',hist:'menu.hist',div:'menu.div',integ:'menu.integ',cfg:'menu.cfg',json:'menu.json',mkt:'menu.mkt',acesso:'admin.usuarios'};
+const podePagina=p=>pode(p.startsWith('bling-')?'menu.bling':PERM_PAGINA[p]);
+const primeiraPagina=()=>{ const a=[...document.querySelectorAll('#menu nav a')].find(a=>!a.classList.contains('hide')&&!a.classList.contains('semperm')); return a?a.dataset.p:'calc'; };
+function aplicarPermissoes(){ document.querySelectorAll('[data-perm]').forEach(e=>e.classList.toggle('semperm',!e.dataset.perm.split(' ').some(pode))); }
 function irPara(p,carregar=true){
-  if(!TITULOS[p]||(p==='mkt'&&carregar&&!PODE_MKT)) p='calc';
+  if(!TITULOS[p]) p='calc';
+  if(carregar&&!podePagina(p)) p=primeiraPagina();
   const sec=p.startsWith('bling-')?'ped':p;
   SECOES.forEach(x=>$(x).classList.toggle('hide',x!==sec));
   document.querySelectorAll('#menu nav a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
@@ -322,7 +330,7 @@ function irPara(p,carregar=true){
   if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
   if(!carregar) return;
   if(sec==='ped') mudarRecurso(p.slice(6)); else if(p==='hist') carregarHistorico(); else if(p==='div') analiseDivergencias();
-  else if(p==='integ') carregarIntegracoes(); else if(p==='mkt') carregarMkt(); else if(p==='cfg') carregarConfig();
+  else if(p==='integ') carregarIntegracoes(); else if(p==='mkt') carregarMkt(); else if(p==='acesso') carregarAcesso(); else if(p==='cfg') carregarConfig();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('#menu a').forEach(a=>a.onclick=e=>{ e.preventDefault(); irPara(a.dataset.p); });
@@ -346,8 +354,8 @@ async function carregarIntegracoes(){
         <dl><dt>Consultas (30 dias)</dt><dd>${i.consultas30}${i.consultas30?` · ${Math.round(i.sucesso30/i.consultas30*100)}% com sucesso`:''}</dd>
         <dt>Tempo médio</dt><dd>${i.msMedio!=null?(i.msMedio/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' s':'—'}</dd>
         <dt>Última consulta</dt><dd>${u?`${horaBR(u.em)}${u.teste?' (teste)':''} · ${u.ok?'<span class="ok">ok</span>':'<span class="err">'+esc(u.erro)+'</span>'}`:'—'}</dd></dl>
-        <div class="acoes"><label class="chk" style="margin:0"><input type="checkbox" data-ativa="${esc(i.id)}" ${i.ativa?'checked':''}> Usar cotação online</label>
-        <button class="btn btn2 btn-mini" data-testar="${esc(i.id)}">Testar conexão</button></div><div class="teste small" id="t_${esc(i.id)}"></div></div>`; }).join('');
+        ${pode('acao.integracoes')?`<div class="acoes"><label class="chk" style="margin:0"><input type="checkbox" data-ativa="${esc(i.id)}" ${i.ativa?'checked':''}> Usar cotação online</label>
+        <button class="btn btn2 btn-mini" data-testar="${esc(i.id)}">Testar conexão</button></div>`:''}<div class="teste small" id="t_${esc(i.id)}"></div></div>`; }).join('');
     $('i_lista').querySelectorAll('[data-ativa]').forEach(c=>c.onchange=async()=>{ c.disabled=true;
       try{ await api('/api/online/ativar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:c.dataset.ativa,ativa:c.checked})}); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
       catch(e){ alert('Erro: '+e.message); c.disabled=false; } });
@@ -362,7 +370,7 @@ async function carregarIntegracoes(){
 const hojeISO=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const diasAtras=n=>new Date(Date.now()-n*864e5-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const n2=(v,c=2)=>(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c});
-let MKT=null, PODE_MKT=false;
+let MKT=null;
 
 // ---------- Exportação: CSV (Excel em português, ";") e XLSX gerado no navegador ----------
 function baixarArquivo(nome,blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome.replace(/\s+/g,'-'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
@@ -488,19 +496,76 @@ async function carregarFixos(){
       ${L.map((f,i)=>`<tr><td><input data-c="${i}" value="${esc(f.termo)}" style="min-width:220px"></td><td><input data-v="${i}" value="${String(f.valor).replace('.',',')}" inputmode="decimal" style="text-align:right;max-width:110px"></td><td>${achados(f)}</td><td><a href="#" class="small" data-r="${i}">remover</a></td></tr>`).join('')}</table>
       <div class="acoes" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn btn2 btn-mini" id="mf_add">Adicionar</button>
       ${j.sugestoes.filter(x=>!L.some(f=>f.termo===x.termo||(f.produtos||[]).some(p=>String(p.id)===x.id))).map((x,k)=>`<button class="btn btn2 btn-mini" data-sug="${k}">+ ${esc(x.nome)} a R$ 0,18</button>`).join('')}
-      <button class="btn" id="mf_salvar">Salvar e recalcular</button><span class="small" id="mf_st"></span></div>`;
+      ${pode('acao.configuracoes')?'<button class="btn" id="mf_salvar">Salvar e recalcular</button>':'<span class="small">Seu perfil não pode alterar esta lista.</span>'}<span class="small" id="mf_st"></span></div>`;
       $('m_fixos').querySelectorAll('[data-c]').forEach(e=>e.oninput=()=>{ L[+e.dataset.c].termo=e.value.trim(); L[+e.dataset.c].produtos=null; });
       $('m_fixos').querySelectorAll('[data-v]').forEach(e=>e.oninput=()=>L[+e.dataset.v].valor=e.value);
       $('m_fixos').querySelectorAll('[data-r]').forEach(e=>e.onclick=ev=>{ ev.preventDefault(); L.splice(+e.dataset.r,1); desenhar(); });
       const sug=j.sugestoes.filter(x=>!L.some(f=>f.termo===x.termo||(f.produtos||[]).some(p=>String(p.id)===x.id)));
       $('m_fixos').querySelectorAll('[data-sug]').forEach(e=>e.onclick=()=>{ const x=sug[+e.dataset.sug]; L.push({termo:x.termo,valor:'0,18',produtos:null}); desenhar(); });
       $('mf_add').onclick=()=>{ L.push({termo:'',valor:'',produtos:null}); desenhar(); };
-      $('mf_salvar').onclick=async()=>{ try{ const r=await api('/api/marketplace/fixos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fixos:L.map(f=>({termo:f.termo,valor:f.valor}))})});
+      if($('mf_salvar')) $('mf_salvar').onclick=async()=>{ try{ const r=await api('/api/marketplace/fixos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fixos:L.map(f=>({termo:f.termo,valor:f.valor}))})});
         L=r.fixos.map(conv); desenhar(); $('mf_st').innerHTML=r.fixos.some(f=>!f.produtos.length)?'<span class="aviso">Salvo, mas algum código ou nome não foi encontrado nos produtos importados.</span>':'<span class="ok">Salvo.</span>'; carregarMkt(); }
         catch(e){ $('mf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
     };
     desenhar();
   }catch(e){ $('m_fixos').innerHTML='<span class="small err">'+esc(e.message)+'</span>'; }
+}
+
+// ---------- Usuários e perfis de acesso ----------
+let ACS=null;
+const postJSON=(u,d,m='POST')=>api(u,{method:m,headers:{'content-type':'application/json'},body:d==null?undefined:JSON.stringify(d)});
+async function carregarAcesso(){
+  $('u_tab').innerHTML='<tr><td class="small">Carregando…</td></tr>';
+  try{ ACS=await api('/api/admin/acesso'); desenharAcesso(); }catch(e){ $('u_tab').innerHTML=`<tr><td class="small err">${esc(e.message)}</td></tr>`; }
+}
+function desenharAcesso(){
+  const eu=($('usuario').textContent||'').toLowerCase();
+  $('u_tab').innerHTML='<tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr>'+ACS.usuarios.map((u,i)=>`<tr class="${u.ativo?'':'inativo'}">
+    <td>${esc(u.nome||'—')}</td><td>${esc(u.email)}</td><td>${esc(u.perfil)}</td><td>${u.ativo?'<span class="pill ok">ativo</span>':'<span class="pill off">inativo</span>'}</td>
+    <td class="small">${u.ultimo_acesso?horaBR(u.ultimo_acesso):'nunca'}</td><td><a href="#" class="small" data-ued="${i}">editar</a></td></tr>`).join('');
+  $('u_tab').querySelectorAll('[data-ued]').forEach(a=>a.onclick=e=>{ e.preventDefault(); formUsuario(ACS.usuarios[+a.dataset.ued]); });
+  const nomes=Object.fromEntries(ACS.catalogo.map(p=>[p.chave,p.nome]));
+  $('pf_lista').innerHTML=ACS.perfis.map((p,i)=>`<div class="perfil"><h3>${esc(p.nome)}${p.sistema?' <span class="pill ok">acesso total</span>':''}<span style="flex:1"></span><span class="small">${p.usuarios} usuário(s)</span> <a href="#" class="small" data-ped="${i}">editar</a></h3>
+    ${p.descricao?`<div class="small">${esc(p.descricao)}</div>`:''}<div class="tags">${p.sistema?'<span>Todas as permissões</span>':(p.permissoes.length?p.permissoes.map(k=>`<span>${esc(nomes[k]||k)}</span>`).join(''):'<span>nenhuma permissão</span>')}</div><div id="pf_f${i}"></div></div>`).join('');
+  $('pf_lista').querySelectorAll('[data-ped]').forEach(a=>a.onclick=e=>{ e.preventDefault(); formPerfil(ACS.perfis[+a.dataset.ped],$('pf_f'+a.dataset.ped)); });
+}
+$('u_novo').onclick=()=>formUsuario(null);
+$('pf_novo').onclick=()=>{ $('pf_lista').insertAdjacentHTML('afterbegin','<div class="perfil" id="pf_nf"></div>'); formPerfil(null,$('pf_nf')); };
+function formUsuario(u){
+  const el=$('u_form'), perfis=ACS.perfis;
+  el.innerHTML=`<div class="ufrm"><div class="full"><b>${u?'Editar usuário':'Novo usuário'}</b></div>
+    <div><label>E-mail (o mesmo do login)</label><input id="uf_email" value="${esc(u?u.email:'')}" inputmode="email" autocomplete="off"></div>
+    <div><label>Nome</label><input id="uf_nome" value="${esc(u&&u.nome||'')}"></div>
+    <div><label>Perfil de acesso</label><select id="uf_perfil">${perfis.map(p=>`<option value="${p.id}" ${u&&u.perfil_id===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
+    <div><label>Situação</label><select id="uf_ativo"><option value="1">Ativo</option><option value="0" ${u&&!u.ativo?'selected':''}>Inativo (sem acesso)</option></select></div>
+    <div class="acoes"><button class="btn" id="uf_salvar">Salvar</button><button class="btn btn2" id="uf_cancelar">Cancelar</button>${u?'<span style="flex:1"></span><a href="#" class="small err" id="uf_excluir">excluir usuário</a>':''}<span class="small" id="uf_st"></span></div></div>`;
+  $('uf_cancelar').onclick=()=>el.innerHTML='';
+  $('uf_salvar').onclick=async()=>{ $('uf_salvar').disabled=true;
+    try{ ACS=await postJSON('/api/admin/usuarios',{email_original:u?u.email:null,email:$('uf_email').value,nome:$('uf_nome').value,perfil_id:+$('uf_perfil').value,ativo:$('uf_ativo').value==='1'});
+      el.innerHTML=''; desenharAcesso(); }
+    catch(e){ $('uf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; $('uf_salvar').disabled=false; } };
+  if(u) $('uf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o usuário ${u.email}? Para só bloquear o acesso, prefira marcar como inativo.`)) return;
+    try{ ACS=await api('/api/admin/usuarios?email='+encodeURIComponent(u.email),{method:'DELETE'}); el.innerHTML=''; desenharAcesso(); }
+    catch(err){ $('uf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
+  $('uf_email').focus(); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function formPerfil(p,el){
+  const grupos=[...new Set(ACS.catalogo.map(c=>c.grupo))], tem=k=>p?(p.sistema||p.permissoes.includes(k)):false;
+  el.innerHTML=`<div class="ufrm"><div class="full"><b>${p?'Editar perfil':'Novo perfil'}</b></div>
+    <div><label>Nome</label><input id="pf_nome" value="${esc(p?p.nome:'')}" maxlength="60"></div>
+    <div><label>Descrição</label><input id="pf_desc" value="${esc(p&&p.descricao||'')}" maxlength="200"></div>
+    <div class="full">${p&&p.sistema?'<p class="small">O perfil Administrador sempre tem todas as permissões. Só o nome e a descrição podem ser alterados.</p>':''}
+      <div class="perms">${grupos.map(g=>`<h4>${esc(g)}</h4>`+ACS.catalogo.filter(c=>c.grupo===g).map(c=>`<label><input type="checkbox" value="${c.chave}" ${tem(c.chave)?'checked':''} ${p&&p.sistema?'disabled':''}> ${esc(c.nome)}</label>`).join('')).join('')}</div></div>
+    <div class="acoes"><button class="btn" id="pf_salvar">Salvar</button><button class="btn btn2" id="pf_cancelar">Cancelar</button>${p&&!p.sistema?'<span style="flex:1"></span><a href="#" class="small err" id="pf_excluir">excluir perfil</a>':''}<span class="small" id="pf_st"></span></div></div>`;
+  const q=c=>el.querySelector(c);
+  q('#pf_cancelar').onclick=()=>{ if(p) el.innerHTML=''; else el.remove(); };
+  q('#pf_salvar').onclick=async()=>{ q('#pf_salvar').disabled=true;
+    try{ ACS=await postJSON('/api/admin/perfis',{id:p?p.id:null,nome:q('#pf_nome').value,descricao:q('#pf_desc').value,permissoes:[...el.querySelectorAll('.perms input:checked')].map(i=>i.value)});
+      desenharAcesso(); }
+    catch(e){ q('#pf_st').innerHTML='<span class="err">'+esc(e.message)+'</span>'; q('#pf_salvar').disabled=false; } };
+  if(p&&!p.sistema) q('#pf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o perfil "${p.nome}"?`)) return;
+    try{ ACS=await api('/api/admin/perfis/'+p.id,{method:'DELETE'}); desenharAcesso(); }catch(err){ q('#pf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
+  q('#pf_nome').focus();
 }
 
 // ---------- Configurações: empresa remetente ----------
@@ -560,9 +625,12 @@ $('cp').onclick=()=>navigator.clipboard.writeText(JSON.stringify(TABELAS,null,1)
 const fmtCep=n=>n?String(n).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):'';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=await r.json(); }catch(e){}
-  if(!r.ok) throw new Error((j&&j.erro)||('HTTP '+r.status)); return j; }
-api('/api/eu').then(async j=>{ API_OK=true; $('usuario').textContent=j.usuario; PODE_MKT=!!(j.permissoes&&j.permissoes.resultadoMarketplace); document.querySelectorAll('#menu .mk').forEach(e=>e.classList.toggle('hide',!PODE_MKT)); calc(); await iniciarBling(); iniciarOnline(); const p=location.hash.slice(1); if(p&&p!=='calc') irPara(p); })
-  .catch(()=>{ API_OK=false; });
+  if(!r.ok) throw Object.assign(new Error((j&&j.erro)||('HTTP '+r.status)),{codigo:j&&j.codigo,status:r.status}); return j; }
+api('/api/eu').then(async j=>{ API_OK=true; PERM=j.permissoes||[];
+    $('usuario').innerHTML=`${esc(j.nome||j.usuario)}<br><span>${esc(j.perfil||'')}</span>`; aplicarPermissoes(); calc(); await iniciarBling(); aplicarPermissoes(); iniciarOnline();
+    const p=location.hash.slice(1)||'calc'; irPara(podePagina(p)?p:primeiraPagina()); })
+  .catch(e=>{ API_OK=false;
+    if(['nao_cadastrado','inativo','nao_identificado'].includes(e.codigo)){ $('bloqueio_msg').textContent=e.message; $('bloqueio').classList.remove('hide'); $('menu').classList.add('hide'); $('conteudo').classList.add('hide'); } });
 $('s_btn').onclick=async()=>{
   if(!ULT||!ULT.res.length) return;
   const b=$('s_btn'); b.disabled=true; $('s_status').className='small';
@@ -856,13 +924,13 @@ async function detalheHistorico(id){
       <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
       ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>
       ${nc.length?`<p class="small">Sem cotação: ${nc.map(n=>esc(n.transportadora)).join(', ')}</p>`:''}
-      <div class="manual"><div class="manual-tit">Valores cotados manualmente</div><div id="hm_lista">${tabelaManuais(c.valores_manuais||[],true)||'<p class="small">Nenhum valor manual registrado.</p>'}</div><div id="hm_form"></div></div></div>`;
+      <div class="manual"><div class="manual-tit">Valores cotados manualmente</div><div id="hm_lista">${tabelaManuais(c.valores_manuais||[],pode('acao.valor_manual'))||'<p class="small">Nenhum valor manual registrado.</p>'}</div><div id="hm_form"></div></div></div>`;
     if(c.motivos) MOTIVOS=c.motivos;
     const L=c.valores_manuais||[];
     const ligar=()=>$('hm_lista').querySelectorAll('.m_rem').forEach(a=>a.onclick=async e=>{ e.preventDefault();
       if(!confirmarRemocao()) return; await api('/api/manuais/'+L[+a.dataset.i].id,{method:'DELETE'}); detalheHistorico(id); });
     ligar();
-    formManual($('hm_form'),[...rs.map(r=>({nome:r.transportadora,calc:+r.total})),...nc.map(n=>({nome:n.transportadora,calc:null}))],async m=>{
+    if(pode('acao.valor_manual')) formManual($('hm_form'),[...rs.map(r=>({nome:r.transportadora,calc:+r.total})),...nc.map(n=>({nome:n.transportadora,calc:null}))],async m=>{
       await api(`/api/cotacoes/${id}/manual`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(m)}); await detalheHistorico(id); });
     $('h_det').scrollIntoView({behavior:'smooth'});
   }catch(e){ $('h_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }

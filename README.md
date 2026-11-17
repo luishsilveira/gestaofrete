@@ -13,6 +13,7 @@ src/index.js                              servidor: API do histórico de cotaç�
 src/bling.js                              integração com o Bling (OAuth, tokens, chamadas à API)
 src/sync.js                               importação do Bling (pedidos, propostas, NF-e, produtos e kits)
 src/online.js                             cotação online: integrações ativas, empresa remetente, registro das consultas
+src/acesso.js                             usuários, perfis de acesso, permissões por rota e conferência do login do Cloudflare Access
 src/marketplace.js                        resultado das vendas em marketplace (rateio do líquido por produto)
 src/apis/comum.js                         utilidades e o contrato dos conectores
 src/apis/braspress.js                     conector Braspress (API própria)
@@ -55,6 +56,24 @@ public/_headers                           cache (dados sempre atualizados)
   - `GET /api/cotacoes?busca=&limite=`: lista as mais recentes
   - `GET /api/cotacoes/{id}`: detalhe completo
 
+## Usuários e perfis de acesso (menu Configurações)
+
+O Cloudflare Access só confirma o e-mail (código enviado por e-mail). Quem entra e o que vê é decidido pela aplicação:
+
+- **Usuários** (`usuarios`): e-mail (em minúsculas), nome, perfil, ativo/inativo, último acesso. Quem não está cadastrado ou está inativo vê "Acesso não autorizado".
+- **Perfis** (`perfis`): criados, alterados e excluídos pelo administrador, com as permissões marcadas. O perfil **Administrador** é fixo: tem sempre todas as permissões (inclusive as criadas depois) e não pode ser excluído. Perfil com usuários não pode ser excluído.
+- **Permissões** (catálogo em `src/acesso.js`):
+  - Menus: Calcular frete, Bling, Resultado no marketplace, Histórico, Divergências, Tabelas, Integrações, Empresa remetente, Modelo de dados.
+  - Ações: salvar cotações, valores manuais, sincronizar/reconectar o Bling, ligar e testar integrações, alterar configurações.
+  - Administração: cadastrar usuários e perfis.
+- **Servidor:** cada rota da API exige a permissão correspondente (`permissaoDaRota`). O menu e os botões só escondem o que o servidor já bloqueia. Sempre resta pelo menos um administrador ativo.
+- **Carga inicial:** perfis Administrador (luish.silveira@gmail.com, proloplasticos@gmail.com) e Comercial (vendasproloplast@gmail.com).
+- **Mudanças** valem em até 30 s (cache do usuário por instância; alterações feitas na tela limpam o cache).
+- **Cloudflare Access:** a política deve aceitar qualquer e-mail (regra **Everyone**), com login por código. Assim, incluir alguém é só cadastrar na aplicação.
+- **Conferência do login:** com a variável `ACCESS_AUD` (Application Audience Tag da aplicação no Access), cada chamada confere o token `Cf-Access-Jwt-Assertion` (assinatura RS256 com as chaves do time, audiência, emissor e validade). `ACCESS_TEAM` é opcional (padrão `odd-salad-41a5.cloudflareaccess.com`). Sem `ACCESS_AUD`, vale o cabeçalho de e-mail.
+- **API:** `GET /api/eu` · `GET /api/admin/acesso` · `POST|DELETE /api/admin/usuarios` · `POST /api/admin/perfis` · `DELETE /api/admin/perfis/{id}`.
+- **Testes:** `node tests/acesso.test.mjs` e `node tests/jwt.test.mjs`.
+
 ## Cotação online nas transportadoras (APIs)
 
 Para cada transportadora com integração ativa, a calculadora consulta a API e usa o valor online. A tabela só entra quando a API não responde ou dá erro. Cada linha do resultado mostra a etiqueta **online** ou **tabela**. A cotação salva registra os dois valores (`valor_online`, `valor_tabela`, `fonte_valor`, `cotacao_online`, `erro_online` em `resultados`), e a página Divergências compara online × tabela por transportadora, UF e praça.
@@ -76,7 +95,7 @@ Mostra quanto a Proloplast recebe de fato pelos produtos vendidos no Mercado Liv
 - **Por pedido:** líquido = valor base do marketplace (`taxas.valorBase`, o que o comprador pagou; sem ele, o total do pedido) − taxa do marketplace (`taxas.taxaComissao`) − custo do frete (`taxas.custoFrete`). Com "Descontar IPI" (padrão), o IPI (`tributacao.totalIPI`) também sai, porque está no total mas é imposto. O resultado é a **mercadoria**.
 - **Rateio:** a mercadoria é dividida entre os itens do pedido pelo valor de cada item. Dentro de um kit, os componentes com **valor fixo** (ex.: lacre a R$ 0,18, configurado em "Itens com valor fixo" pelo código do produto ou por parte do nome, que pega todas as variações; `app_config.valores_fixos`) ficam com esse valor; o restante é dividido entre os outros componentes **pelo peso** (peso bruto do cadastro × quantidade). Componente sem peso cadastrado fica fora do rateio (aviso na tela); só quando nenhum tem peso, pela quantidade.
 - **Telas:** indicadores do período (vendido, comissão + frete, líquido, mercadoria, peso, recebido por kg); faixa "de cada R$ 100 vendidos"; tabela por produto (componente) com recebido por unidade, por kg e % do preço de cadastro; tabela por anúncio (produto vendido); pedidos com o rateio de cada um; exportação em Excel (abas Pedidos, Rateio por componente e Por produto, gerado no navegador) e CSV.
-- **Acesso restrito:** só luish.silveira@gmail.com e proloplasticos@gmail.com veem o menu e a API (os outros recebem 403). Para mudar a lista sem mexer no código, crie a variável `ACESSO_RESULTADO` no Cloudflare com os e-mails separados por vírgula.
+- **Acesso:** permissão "Resultado no marketplace" do perfil (ver Usuários e perfis).
 - **API:** `GET /api/marketplace?de=&ate=&canal=Mercado Livre|Shopee|…|marketplace&ipi=0|1` · `GET|POST /api/marketplace/fixos`.
 - **Testes:** `node tests/marketplace.test.mjs`.
 

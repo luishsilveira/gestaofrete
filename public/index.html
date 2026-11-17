@@ -17,27 +17,29 @@
 <span>Gestão de frete</span></a>
 <nav>
 <div class="grupo">Cotar</div>
-<a href="#calc" data-p="calc"><i>◎</i>Calcular frete</a>
-<div class="grupo bl hide">Bling</div>
-<a href="#bling-pedidos" data-p="bling-pedidos" class="bl hide"><i>▤</i>Pedidos</a>
-<a href="#bling-propostas" data-p="bling-propostas" class="bl hide"><i>▤</i>Propostas</a>
-<a href="#bling-notas" data-p="bling-notas" class="bl hide"><i>▤</i>Notas fiscais</a>
-<a href="#bling-produtos" data-p="bling-produtos" class="bl hide"><i>▤</i>Produtos</a>
-<div class="grupo mk hide">Vendas</div>
-<a href="#mkt" data-p="mkt" class="mk hide"><i>◆</i>Resultado no marketplace</a>
-<div class="grupo">Análises</div>
-<a href="#hist" data-p="hist"><i>☰</i>Histórico de cotações</a>
-<a href="#div" data-p="div"><i>△</i>Divergências</a>
-<div class="grupo">Transportadoras</div>
-<a href="#tab" data-p="tab"><i>▦</i>Tabelas de frete</a>
-<a href="#integ" data-p="integ"><i>⇄</i>Integrações (APIs)</a>
-<div class="grupo">Configurações</div>
-<a href="#cfg" data-p="cfg"><i>⚙</i>Empresa remetente</a>
-<a href="#json" data-p="json"><i>{ }</i>Modelo de dados</a>
+<a href="#calc" data-p="calc" data-perm="menu.calc"><i>◎</i>Calcular frete</a>
+<div class="grupo bl hide" data-perm="menu.bling">Bling</div>
+<a href="#bling-pedidos" data-p="bling-pedidos" class="bl hide" data-perm="menu.bling"><i>▤</i>Pedidos</a>
+<a href="#bling-propostas" data-p="bling-propostas" class="bl hide" data-perm="menu.bling"><i>▤</i>Propostas</a>
+<a href="#bling-notas" data-p="bling-notas" class="bl hide" data-perm="menu.bling"><i>▤</i>Notas fiscais</a>
+<a href="#bling-produtos" data-p="bling-produtos" class="bl hide" data-perm="menu.bling"><i>▤</i>Produtos</a>
+<div class="grupo" data-perm="menu.mkt">Vendas</div>
+<a href="#mkt" data-p="mkt" data-perm="menu.mkt"><i>◆</i>Resultado no marketplace</a>
+<div class="grupo" data-perm="menu.hist menu.div">Análises</div>
+<a href="#hist" data-p="hist" data-perm="menu.hist"><i>☰</i>Histórico de cotações</a>
+<a href="#div" data-p="div" data-perm="menu.div"><i>△</i>Divergências</a>
+<div class="grupo" data-perm="menu.tab menu.integ">Transportadoras</div>
+<a href="#tab" data-p="tab" data-perm="menu.tab"><i>▦</i>Tabelas de frete</a>
+<a href="#integ" data-p="integ" data-perm="menu.integ"><i>⇄</i>Integrações (APIs)</a>
+<div class="grupo" data-perm="menu.cfg menu.json admin.usuarios">Configurações</div>
+<a href="#cfg" data-p="cfg" data-perm="menu.cfg"><i>⚙</i>Empresa remetente</a>
+<a href="#acesso" data-p="acesso" data-perm="admin.usuarios"><i>☺</i>Usuários e perfis</a>
+<a href="#json" data-p="json" data-perm="menu.json"><i>{ }</i>Modelo de dados</a>
 </nav>
 <div class="slogan">Tecnologia em Plástico Resistente</div>
 <div class="usuario small" id="usuario"></div>
 </aside>
+<div id="bloqueio" class="hide"><div class="card"><img src="img/logo.png" alt="ProloPlast" style="width:180px;background:var(--navy);padding:14px 18px;border-radius:10px"><h1 style="margin-top:18px">Acesso não autorizado</h1><p id="bloqueio_msg"></p><p class="small">Peça ao administrador da Proloplast para cadastrar o seu e-mail em Configurações → Usuários e perfis.</p></div></div>
 <div id="conteudo">
 <header>
 <button id="abrir_menu" class="btn btn2" aria-label="Abrir menu">☰</button>
@@ -52,7 +54,7 @@
 <h2>Pedido, proposta ou NF do Bling</h2>
 <div class="bling-busca"><input id="b_num" placeholder="Nº do pedido, proposta ou NF" inputmode="numeric"><button class="btn" id="b_buscar">Buscar</button></div>
 <div class="small" id="b_status"></div>
-<a class="btn btn2 hide" id="b_conectar" href="/api/bling/conectar">Conectar ao Bling</a>
+<a class="btn btn2 hide" data-perm="acao.bling_sincronizar" id="b_conectar" href="/api/bling/conectar">Conectar ao Bling</a>
 <hr>
 </div>
 <h2>Destino</h2>
@@ -104,7 +106,7 @@
 </div>
 <label>Observação (opcional)</label><input id="s_obs" maxlength="500">
 <label>Transportadora escolhida</label><select id="s_transp"></select>
-<div class="manual"><div class="manual-tit">Valor cotado manualmente <span class="small">(opcional – use quando a transportadora informar um valor diferente do calculado)</span></div>
+<div class="manual" data-perm="acao.valor_manual"><div class="manual-tit">Valor cotado manualmente <span class="small">(opcional – use quando a transportadora informar um valor diferente do calculado)</span></div>
 <div id="m_form"></div><div id="m_lista"></div></div>
 <div class="salvar-acao"><button class="btn" id="s_btn">Salvar cotação</button><button class="btn btn2" id="s_copiar">Copiar valor do frete</button><span class="small" id="s_status"></span></div>
 </div>
@@ -136,7 +138,7 @@
 <option value="Loja virtual">Loja virtual</option>
 </select>
 <select id="p_filtro" style="max-width:240px"></select>
-<button class="btn" id="p_sync">Sincronizar agora</button><a class="small" href="/api/bling/conectar" title="Use depois de alterar as permissões do aplicativo no Bling">Reconectar ao Bling</a></div>
+<button class="btn" id="p_sync" data-perm="acao.bling_sincronizar">Sincronizar agora</button><a class="small" data-perm="acao.bling_sincronizar" href="/api/bling/conectar" title="Use depois de alterar as permissões do aplicativo no Bling">Reconectar ao Bling</a></div>
 <div class="small" id="p_status" style="margin:10px 0"></div>
 <div class="tbl-wrap"><table id="p_tab"></table></div>
 <div id="p_det"></div>
@@ -190,7 +192,18 @@
 <label>CNPJ remetente</label><select id="c_cnpj"></select>
 <label>CEP de origem</label><input id="c_cep" inputmode="numeric" maxlength="9">
 <p class="small" id="c_info"></p>
-<button class="btn" id="c_salvar">Salvar</button> <span class="small" id="c_status"></span>
+<button class="btn" id="c_salvar" data-perm="acao.configuracoes">Salvar</button> <span class="small" id="c_status"></span>
+</div>
+</section>
+
+<section id="acesso" class="hide">
+<div class="acesso-cols">
+<div class="card"><div class="hist-top"><h2 style="margin:0">Usuários</h2><span style="flex:1"></span><button class="btn btn-mini" id="u_novo">Novo usuário</button></div>
+<p class="small">Quem estiver cadastrado e ativo entra na aplicação com o login por e-mail (código enviado pelo Cloudflare). O perfil define o que cada um vê e pode fazer.</p>
+<div id="u_form"></div><div class="tbl-wrap"><table id="u_tab"></table></div></div>
+<div class="card"><div class="hist-top"><h2 style="margin:0">Perfis de acesso</h2><span style="flex:1"></span><button class="btn btn-mini" id="pf_novo">Novo perfil</button></div>
+<p class="small">Crie quantos perfis precisar e marque os menus e ações de cada um. Mudanças valem em até 30 segundos, no próximo acesso do usuário.</p>
+<div id="pf_lista"></div></div>
 </div>
 </section>
 

@@ -1,0 +1,22 @@
+// Conferência do token do Cloudflare Access (RS256, audiência, emissor, validade).
+import { emailDaRequisicao } from '../src/acesso.js';
+let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
+const { publicKey, privateKey } = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+const jwk = { ...(await crypto.subtle.exportKey('jwk', publicKey)), kid: 'k1' };
+const b64 = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
+const assinar = async (dados, chave = privateKey) => { const h = b64({ alg: 'RS256', kid: 'k1' }), p = b64(dados);
+  const s = Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', chave, new TextEncoder().encode(`${h}.${p}`))).toString('base64url'); return `${h}.${p}.${s}`; };
+const env = { ACCESS_AUD: 'AUD1', ACCESS_TEAM: 'time.cloudflareaccess.com' };
+const certs = async (u) => { t('busca as chaves do time', String(u) === 'https://time.cloudflareaccess.com/cdn-cgi/access/certs'); return new Response(JSON.stringify({ keys: [jwk] })); };
+const req = (jwt, email = 'outro@x') => new Request('https://x', { headers: { 'cf-access-jwt-assertion': jwt, 'cf-access-authenticated-user-email': email } });
+const base = { email: 'luis@x', aud: ['AUD1'], iss: 'https://time.cloudflareaccess.com', exp: Math.floor(Date.now() / 1000) + 600 };
+t('token válido: e-mail do token (não do cabeçalho)', (await emailDaRequisicao(req(await assinar(base)), env, certs)) === 'luis@x');
+const falha = async (jwt) => { try { await emailDaRequisicao(req(jwt), env, certs); return false; } catch (e) { return e.status === 401; } };
+t('audiência errada', await falha(await assinar({ ...base, aud: ['OUTRA'] })));
+t('expirado', await falha(await assinar({ ...base, exp: 1000 })));
+t('emissor errado', await falha(await assinar({ ...base, iss: 'https://outro.cloudflareaccess.com' })));
+const outra = (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign'])).privateKey;
+t('assinatura falsa', await falha(await assinar(base, outra)));
+t('sem token', await falha(''));
+t('sem ACCESS_AUD: usa o cabeçalho', (await emailDaRequisicao(req('', 'cab@x'), {})) === 'cab@x');
+console.log(`\n${ok} ok, ${fail} falhas`); process.exit(fail ? 1 : 0);

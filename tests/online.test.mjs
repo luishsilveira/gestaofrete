@@ -3,6 +3,7 @@ import worker from '../src/index.js';
 import { lerResposta, montarParametros, envelope } from '../src/apis/ssw.js';
 import { normalizarPedido } from '../src/apis/comum.js';
 import { psql } from './pgpsql.mjs';
+import { cadastrarAdmins } from './usuarios.mjs';
 
 let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
 const env = { HYPERDRIVE: { connectionString: 'x' }, ASSETS: { fetch: async () => new Response('') },
@@ -46,6 +47,7 @@ psql(`CREATE TABLE braspress_cotacoes (id BIGSERIAL, criado_em TIMESTAMPTZ DEFAU
   INSERT INTO braspress_cotacoes (usuario, chave, total, prazo, id_braspress) VALUES ('antigo','k',100,5,'1');`);
 
 // ---- status e configuração
+await cadastrarAdmins(api, 'luis@x');
 let r = await api('/api/online/status');
 t('status: 2 integrações ativas', r.status === 200 && r.j.integracoes.filter((i) => i.ativa).map((i) => i.id).join() === 'braspress,ssw-expresso-leomar');
 t('consultas antigas migradas', +psql(`SELECT count(*) FROM api_consultas WHERE integracao='braspress' AND usuario='antigo';`).trim() === 1);
