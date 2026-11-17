@@ -330,7 +330,7 @@ function irPara(p,carregar=true){
   if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
   if(!carregar) return;
   if(sec==='ped') mudarRecurso(p.slice(6)); else if(p==='hist') carregarHistorico(); else if(p==='div') analiseDivergencias();
-  else if(p==='integ') carregarIntegracoes(); else if(p==='mkt') carregarMkt(); else if(p==='acesso') carregarAcesso(); else if(p==='cfg') carregarConfig();
+  else if(p==='integ'){ carregarIntegracoes(); carregarCredenciais(); } else if(p==='mkt') carregarMkt(); else if(p==='acesso') carregarAcesso(); else if(p==='cfg') carregarConfig();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('#menu a').forEach(a=>a.onclick=e=>{ e.preventDefault(); irPara(a.dataset.p); });
@@ -348,9 +348,9 @@ async function carregarIntegracoes(){
       const tipo=i.tipo==='ssw'?'Web service SSW':i.tipo==='braspress'?'API própria da Braspress':esc(i.tipo);
       const tab=i.tabela?(TABELAS.find(t=>t.id===i.tabela)||{}).transportadora:null;
       if(!i.configurada) return `<div class="integ"><h3>${esc(i.transportadora||(i.tipo==='ssw'?'Transportadoras SSW':i.tipo))}${pill}</h3><div class="tp">${tipo}</div>
-        <p class="small">${i.erroConfig?esc(i.erroConfig):i.tipo==='ssw'?'Nenhuma transportadora SSW cadastrada. Veja abaixo como incluir.':'Sem credenciais no Cloudflare.'}</p></div>`;
+        <p class="small">${i.erroConfig?esc(i.erroConfig):i.tipo==='ssw'?'Nenhuma transportadora SSW cadastrada. Use "Nova transportadora SSW" abaixo.':'Sem credenciais. Use "Nova conta Braspress" abaixo.'}</p></div>`;
       const u=i.ultima;
-      return `<div class="integ"><h3>${esc(i.transportadora)}${pill}</h3><div class="tp">${tipo}${tab?' · compara com a tabela '+esc(tab):' · sem tabela própria'}</div>
+      return `<div class="integ"><h3>${esc(i.transportadora)}${pill}</h3><div class="tp">${tipo}${tab?' · compara com a tabela '+esc(tab):' · sem tabela própria'}${i.origem?' · credenciais: '+esc(i.origem):''}</div>
         <dl><dt>Consultas (30 dias)</dt><dd>${i.consultas30}${i.consultas30?` · ${Math.round(i.sucesso30/i.consultas30*100)}% com sucesso`:''}</dd>
         <dt>Tempo médio</dt><dd>${i.msMedio!=null?(i.msMedio/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' s':'—'}</dd>
         <dt>Última consulta</dt><dd>${u?`${horaBR(u.em)}${u.teste?' (teste)':''} · ${u.ok?'<span class="ok">ok</span>':'<span class="err">'+esc(u.erro)+'</span>'}`:'—'}</dd></dl>
@@ -582,6 +582,47 @@ function formPerfil(p){
   if(p&&!sis) $('pf_excluir').onclick=async e=>{ e.preventDefault(); if(!confirm(`Excluir o perfil "${p.nome}"?`)) return;
     try{ ACS=await api('/api/admin/perfis/'+p.id,{method:'DELETE'}); fecharModal(); desenharAcesso(); }catch(err){ $('pf_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
   $('pf_nome').focus();
+}
+
+// ---------- Credenciais das integrações (tela Integrações) ----------
+let CRED=null;
+async function carregarCredenciais(){
+  if(!pode('acao.integracoes')) return;
+  try{ CRED=await api('/api/online/credenciais'); desenharCredenciais(); }catch(e){ $('cr_lista').innerHTML='<p class="small err">'+esc(e.message)+'</p>'; }
+}
+function desenharCredenciais(){
+  $('cr_lista').innerHTML=CRED.map(t=>{
+    const vis=t.campos.filter(c=>c.tipo!=='tabela'||true);
+    return `<h3 style="font-size:14px;margin:16px 0 6px">${esc(t.nome)}</h3>
+    ${t.erro?`<p class="small err">${esc(t.erro)}</p>`:''}
+    ${t.entradas.length?`<div class="tbl-wrap"><table class="mini"><tr>${vis.map(c=>`<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr>
+      ${t.entradas.map((e,i)=>`<tr>${vis.map(c=>`<td>${c.tipo==='tabela'?esc(((TABELAS.find(x=>x.id===e[c.k])||{}).transportadora)||'—'):esc(e[c.k]||'—')}</td>`).join('')}
+        <td><a href="#" class="small" data-cred="${t.tipo}|${i}">editar</a></td></tr>`).join('')}</table></div>`
+      :`<p class="small">${t.noCloudflare?'Nenhuma credencial cadastrada aqui; a configuração atual vem do Cloudflare (continua valendo).':'Nenhuma credencial cadastrada.'}</p>`}
+    ${t.atualizado_em?`<p class="small">Atualizado em ${horaBR(t.atualizado_em)} por ${esc(t.atualizado_por||'')}.</p>`:''}`; }).join('');
+  $('cr_lista').querySelectorAll('[data-cred]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const [tp,i]=a.dataset.cred.split('|'); const t=CRED.find(x=>x.tipo===tp); formCredencial(t,t.entradas[+i]); });
+}
+$('cr_ssw').onclick=()=>CRED&&formCredencial(CRED.find(t=>t.tipo==='ssw'),null);
+$('cr_bp').onclick=()=>CRED&&formCredencial(CRED.find(t=>t.tipo==='braspress'),null);
+function formCredencial(t,e){
+  const campo=c=>{ const v=e&&!c.secreto?e[c.k]:'';
+    if(c.tipo==='tabela') return `<div><label>${esc(c.rotulo)} (opcional)</label><select data-k="${c.k}"><option value="">nenhuma (só cotação online)</option>${TABELAS.map(x=>`<option value="${esc(x.id)}" ${v===x.id?'selected':''}>${esc(x.transportadora)}</option>`).join('')}</select></div>`;
+    return `<div><label>${esc(c.rotulo)}${c.obrig?'':' (opcional)'}</label><input data-k="${c.k}" ${c.secreto?'type="password" autocomplete="new-password"':'autocomplete="off"'} value="${esc(v||'')}"
+      placeholder="${c.secreto&&e?'em branco = manter a senha atual':esc(c.ex||'')}"></div>`; };
+  abrirModal(`<div class="modal-cab"><h2>${e?'Editar':'Nova'} · ${esc(t.nome)}</h2><button class="x" data-fechar aria-label="Fechar">×</button></div>
+    <div class="modal-corpo"><div class="campos2">${t.campos.map(campo).join('')}</div>
+    <p class="small" style="margin-top:12px">Depois de salvar, use <b>Testar conexão</b> no cartão da transportadora.</p></div>
+    <div class="modal-rod">${e?'<a href="#" class="small err" id="cr_excluir">Excluir</a>':''}<span class="small" id="cr_st"></span><span class="esp"></span>
+      <button class="btn btn2" data-fechar>Cancelar</button><button class="btn" id="cr_salvar">Salvar</button></div>`);
+  const M=$('modal'), orig=e?e[t.chave]:null;
+  $('cr_salvar').onclick=async()=>{ $('cr_salvar').disabled=true;
+    const dados=Object.fromEntries([...M.querySelectorAll('[data-k]')].map(i=>[i.dataset.k,i.value]));
+    try{ CRED=await postJSON('/api/online/credenciais',{tipo:t.tipo,original:orig,dados}); fecharModal(); desenharCredenciais(); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+    catch(err){ $('cr_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; $('cr_salvar').disabled=false; } };
+  if(e) $('cr_excluir').onclick=async ev=>{ ev.preventDefault(); if(!confirm('Excluir estas credenciais? A integração deixa de funcionar.')) return;
+    try{ CRED=await api(`/api/online/credenciais?tipo=${t.tipo}&chave=${encodeURIComponent(orig)}`,{method:'DELETE'}); fecharModal(); desenharCredenciais(); ONL.res=null; await iniciarOnline(); carregarIntegracoes(); }
+    catch(err){ $('cr_st').innerHTML='<span class="err">'+esc(err.message)+'</span>'; } };
+  const p1=M.querySelector('[data-k]'); if(p1) p1.focus();
 }
 
 // ---------- Configurações: empresa remetente ----------

@@ -178,11 +178,11 @@
 <section id="integ" class="hide">
 <p class="small" id="i_rem"></p>
 <div id="i_lista" class="integ-grid"></div>
-<div class="card" style="margin-top:16px">
-<h2>Como incluir uma transportadora</h2>
-<p class="small"><b>Transportadoras que usam o sistema SSW</b> (como a Expresso Leomar): peça a ela o <i>domínio</i>, o <i>login</i> e a <i>senha</i> do web service de cotação e acrescente uma entrada no secret <code>SSW_TRANSPORTADORAS</code> do Cloudflare (Workers &amp; Pages → gestaofrete → Settings → Variables and secrets, tipo Secret):</p>
-<pre class="cod">[{"transportadora":"Expresso Leomar","dominio":"…","login":"…","senha":"…","cnpjPagador":"12995553000100"}]</pre>
-<p class="small">Para mais de uma transportadora SSW, inclua uma entrada por transportadora na mesma lista. <b>Outras transportadoras com API própria</b> (como a Braspress): envie a documentação e as credenciais de teste para criarmos o conector.</p>
+<div class="card" style="margin-top:16px" data-perm="acao.integracoes">
+<div class="hist-top"><h2 style="margin:0">Credenciais das integrações</h2><span style="flex:1"></span><button class="btn btn-mini" id="cr_ssw">Nova transportadora SSW</button><button class="btn btn2 btn-mini" id="cr_bp">Nova conta Braspress</button></div>
+<p class="small">Usuário e senha de cada transportadora, cadastrados aqui mesmo e guardados criptografados. A senha nunca volta para a tela: para trocar, digite a nova; em branco, mantém a atual.
+<b>Transportadoras do sistema SSW</b> (Expresso Leomar e muitas outras) entram só com domínio, usuário e senha. Para <b>transportadoras com API própria</b>, envie a documentação para criarmos o conector.</p>
+<div id="cr_lista"></div>
 </div>
 </section>
 

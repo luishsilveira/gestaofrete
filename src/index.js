@@ -6,6 +6,7 @@
 
 import { Client } from 'pg';
 import { BLING, SCHEMA_BLING, BlingErro, blingConfigurado, pedirToken, salvarTokens, tokenValido } from './bling.js';
+import { SCHEMA_CREDENCIAIS, listarCredenciais, salvarCredencial, excluirCredencial } from './credenciais.js';
 import { SCHEMA_ACESSO, prepararAcesso, carregarUsuario, exigir, permissaoDaRota, registrarAcesso, listarAcesso, salvarUsuario, excluirUsuario, salvarPerfil, excluirPerfil, emailDaRequisicao, AcessoErro } from './acesso.js';
 import { analisarMarketplace, lerFixos, salvarFixos, sugestoesFixos } from './marketplace.js';
 import { SCHEMA_ONLINE, MIGRAR_ONLINE, cotarOnline, testarIntegracao, statusIntegracoes, ativarIntegracao, configuracao, salvarConfiguracao } from './online.js';
@@ -83,6 +84,7 @@ async function comBanco(env, ctx, fn) {
       await client.query(SCHEMA_ONLINE);
       await client.query(MIGRAR_ONLINE);
       await client.query(SCHEMA_ACESSO);
+      await client.query(SCHEMA_CREDENCIAIS);
       await prepararAcesso(client);
       esquemaPronto = true;
     }
@@ -568,6 +570,13 @@ export default {
       if (url.pathname === '/api/online/cotar' && request.method === 'POST') {
         const d = await corpoJson();
         return json(await comBanco(env, ctx, (db) => cotarOnline(env, db, d, usuario)));
+      }
+      if (url.pathname === '/api/online/credenciais') {
+        await comBanco(env, ctx, async (db) => {
+          if (request.method === 'POST') { const d = await corpoJson(); await salvarCredencial(env, db, String(d.tipo || ''), d.dados || {}, d.original, usuario); }
+          if (request.method === 'DELETE') await excluirCredencial(env, db, url.searchParams.get('tipo'), url.searchParams.get('chave'), usuario);
+        });
+        return json(await comBanco(env, ctx, (db) => listarCredenciais(env, db)));
       }
       if (url.pathname === '/api/online/status') return json(await comBanco(env, ctx, (db) => statusIntegracoes(env, db)));
       if (url.pathname === '/api/online/ativar' && request.method === 'POST') {

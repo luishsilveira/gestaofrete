@@ -107,7 +107,7 @@ const REGRAS = [
   [/^\/api\/bling\/pedido$/, 'menu.calc'],
   [/^\/api\/bling\//, 'menu.bling'],
   [/^\/api\/online\/cotar$/, 'menu.calc'],
-  [/^\/api\/online\/(ativar|testar)$/, 'acao.integracoes'],
+  [/^\/api\/online\/(ativar|testar|credenciais)$/, 'acao.integracoes'],
   [/^\/api\/online\/status$/, null],
   [/^\/api\/marketplace\/fixos$/, { GET: 'menu.mkt', POST: ['menu.mkt', 'acao.configuracoes'] }],
   [/^\/api\/marketplace/, 'menu.mkt'],

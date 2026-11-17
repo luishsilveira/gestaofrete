@@ -1,6 +1,7 @@
 // Cotação online nas transportadoras: junta os conectores de src/apis/, guarda a configuração
 // (integrações ativas, empresa remetente) e registra todas as consultas em api_consultas.
-import { so, CEP_ORIGEM_PADRAO, normalizarPedido, validarPedido, comTempoLimite } from './apis/comum.js';
+import { so, slug, lerJSONSecret, CEP_ORIGEM_PADRAO, normalizarPedido, validarPedido, comTempoLimite } from './apis/comum.js';
+import { lerCredenciais, CAMPOS } from './credenciais.js';
 import * as braspress from './apis/braspress.js';
 import * as ssw from './apis/ssw.js';
 
@@ -55,10 +56,25 @@ DO $$ BEGIN
 END $$;
 `;
 
-export function todasIntegracoes(env) {
+// Integrações configuradas: credenciais cadastradas na tela (banco, criptografadas) + secrets antigos do
+// Cloudflare. Quando a mesma entrada existe nos dois, vale a da tela.
+const SECRET_DO_TIPO = { ssw: 'SSW_TRANSPORTADORAS', braspress: 'BRASPRESS_CONTAS' };
+export async function todasIntegracoes(env, db) {
+  const cred = db ? await lerCredenciais(env, db) : {};
   const L = [];
   for (const c of CONECTORES) {
-    try { L.push(...c.integracoes(env)); } catch (e) { L.push({ id: c.tipo, tipo: c.tipo, transportadora: c.tipo, erroConfig: e.message }); }
+    const nome = SECRET_DO_TIPO[c.tipo], def = CAMPOS[c.tipo];
+    const doBanco = (cred[c.tipo] && cred[c.tipo].lista) || [];
+    let doSecret = [];
+    try { doSecret = lerJSONSecret(env, nome); } catch (e) { L.push({ id: c.tipo, tipo: c.tipo, transportadora: c.tipo, erroConfig: e.message }); continue; }
+    const k = (x) => String(x[def.chave] || '').replace(/[.\/-]/g, '').trim().toLowerCase();
+    const juntos = [...doBanco, ...doSecret.filter((x) => !doBanco.some((y) => k(y) === k(x)))];
+    try {
+      L.push(...c.integracoes({ [nome]: JSON.stringify(juntos) }).map((i) => ({ ...i,
+        origem: c.tipo === 'braspress' ? (doBanco.length ? (doSecret.length ? 'tela e Cloudflare' : 'tela') : 'Cloudflare')
+          : (doBanco.some((x) => i.id === 'ssw-' + slug(x.id || x.transportadora)) ? 'tela' : 'Cloudflare') })));
+    } catch (e) { L.push({ id: c.tipo, tipo: c.tipo, transportadora: c.tipo, erroConfig: e.message }); }
+    if (cred[c.tipo] && cred[c.tipo].erro) L.push({ id: c.tipo + '-credenciais', tipo: c.tipo, transportadora: def.nome, erroConfig: cred[c.tipo].erro });
   }
   return L;
 }
@@ -94,7 +110,7 @@ async function consultarCnpj(cnpj, fetchImpl) {
 
 // CNPJs da empresa (os que aparecem nas credenciais das integrações), com o cadastro de cada um.
 export async function remetentes(env, db, fetchImpl = fetch) {
-  const cnpjs = [...new Set(todasIntegracoes(env).flatMap((i) => i.cnpjs || []))];
+  const cnpjs = [...new Set((await todasIntegracoes(env, db)).flatMap((i) => i.cnpjs || []))];
   if (!cnpjs.length) return [];
   const r = await db.query('SELECT * FROM cnpj_cadastro WHERE cnpj = ANY($1::text[])', [cnpjs]);
   const cad = Object.fromEntries(r.rows.map((x) => [x.cnpj, x]));
@@ -131,7 +147,7 @@ export async function salvarConfiguracao(db, c, usuario) {
 
 async function estadoIntegracoes(db) { return (await lerConfig(db, 'integracoes')) || {}; }
 export async function ativarIntegracao(env, db, id, ativa, usuario) {
-  if (!todasIntegracoes(env).some((i) => i.id === id)) throw Object.assign(new Error('Integração não encontrada.'), { status: 404 });
+  if (!(await todasIntegracoes(env, db)).some((i) => i.id === id)) throw Object.assign(new Error('Integração não encontrada.'), { status: 404 });
   const e = await estadoIntegracoes(db);
   e[id] = { ...(e[id] || {}), ativa: !!ativa };
   await gravarConfig(db, 'integracoes', e, usuario);
@@ -174,7 +190,7 @@ async function cotarUma(env, db, integ, req, usuario, { fetchImpl = fetch, semCa
 // Cota em todas as integrações ativas, em paralelo.
 export async function cotarOnline(env, db, d, usuario, fetchImpl = fetch) {
   const estado = await estadoIntegracoes(db);
-  const ativas = todasIntegracoes(env).filter((i) => !i.erroConfig && (estado[i.id] || {}).ativa !== false);
+  const ativas = (await todasIntegracoes(env, db)).filter((i) => !i.erroConfig && (estado[i.id] || {}).ativa !== false);
   if (!ativas.length) return { remetente: null, resultados: [] };
   const rem = await remetenteAtual(env, db, fetchImpl);
   const req = normalizarPedido(d, rem);
@@ -187,7 +203,7 @@ export async function cotarOnline(env, db, d, usuario, fetchImpl = fetch) {
 
 // Teste de conexão com dados fixos (São Paulo/SP, 50 kg, NF R$ 1.000, 1 volume), sem usar o cache.
 export async function testarIntegracao(env, db, id, usuario, fetchImpl = fetch) {
-  const integ = todasIntegracoes(env).find((i) => i.id === id);
+  const integ = (await todasIntegracoes(env, db)).find((i) => i.id === id);
   if (!integ) throw Object.assign(new Error('Integração não encontrada.'), { status: 404 });
   if (integ.erroConfig) return { integracao: id, ok: false, erro: integ.erroConfig };
   const rem = await remetenteAtual(env, db, fetchImpl);
@@ -198,7 +214,7 @@ export async function testarIntegracao(env, db, id, usuario, fetchImpl = fetch) 
 // Situação de cada integração: configurada, ativa, uso e falhas nos últimos 30 dias.
 export async function statusIntegracoes(env, db, fetchImpl = fetch) {
   const estado = await estadoIntegracoes(db);
-  const integ = todasIntegracoes(env);
+  const integ = await todasIntegracoes(env, db);
   const st = (await db.query(
     `SELECT integracao, COUNT(*) FILTER (WHERE NOT teste) AS n, COUNT(*) FILTER (WHERE erro IS NULL AND NOT teste) AS ok,
             ROUND(AVG(ms) FILTER (WHERE erro IS NULL)) AS ms_medio, MAX(criado_em) AS ultima
@@ -206,7 +222,7 @@ export async function statusIntegracoes(env, db, fetchImpl = fetch) {
   const ult = (await db.query(
     `SELECT DISTINCT ON (integracao) integracao, criado_em, erro, teste FROM api_consultas ORDER BY integracao, criado_em DESC`)).rows;
   const conhecidas = [
-    ...integ.map((i) => ({ id: i.id, tipo: i.tipo, transportadora: i.transportadora, tabela: i.tabela || null, configurada: !i.erroConfig, erroConfig: i.erroConfig || null })),
+    ...integ.map((i) => ({ id: i.id, tipo: i.tipo, transportadora: i.transportadora, tabela: i.tabela || null, origem: i.origem || null, configurada: !i.erroConfig, erroConfig: i.erroConfig || null })),
     // conectores sem nenhuma credencial cadastrada aparecem como "não configurada"
     ...CONECTORES.filter((c) => !integ.some((i) => i.tipo === c.tipo)).map((c) => ({ id: c.tipo, tipo: c.tipo, transportadora: null, configurada: false })),
   ];
