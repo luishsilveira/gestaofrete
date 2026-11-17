@@ -65,7 +65,9 @@ export function lerResposta(texto) {
   const r0 = bloco(texto, 'return');
   const ret = r0 != null ? desescXml(r0) : texto;
   const erro = tag(ret, 'erro');
-  const msg = limparTexto(tag(ret, 'mensagem'));
+  // a mensagem pode trazer HTML (<br>, &Atilde;…): pega o bloco inteiro e limpa
+  const mb = bloco(ret, 'mensagem');
+  const msg = mb == null ? null : limparTexto(desescXml(mb)) || null;
   // recusa da própria transportadora (ex.: destino não atendido): a mensagem vem dela
   if (erro != null && erro !== '0') throw Object.assign(new Error('SSW: ' + (msg || `erro ${erro}`)), { respondeu: true, mensagem: msg || `erro ${erro}` });
   const total = numeroBR(tag(ret, 'totalFrete', 'frete', 'valorFrete'));
