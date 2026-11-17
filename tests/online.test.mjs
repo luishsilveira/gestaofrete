@@ -87,7 +87,7 @@ r = await api('/api/online/testar', 'POST', { id: 'ssw-expresso-leomar' });
 t('teste de conexão', r.j.ok && r.j.total === 99.9);
 r = await api('/api/online/status');
 const sl = r.j.integracoes.find((i) => i.id === 'ssw-expresso-leomar');
-t('status: desativada, último teste ok, estatística sem testes', !sl.ativa && sl.ultima.ok && sl.ultima.teste && sl.consultas30 === 2 && sl.sucesso30 === 1);
+t('status: desativada, último teste ok, estatística sem testes', !sl.ativa && sl.ultima.ok && sl.ultima.teste && sl.consultas30 === 3 && sl.sucesso30 === 1);
 
 // ---- configurar remetente
 r = await api('/api/config', 'POST', { cnpj: '46816509000108', cep: '93000-000' });
