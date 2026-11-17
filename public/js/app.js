@@ -232,7 +232,9 @@ function calc(){
       }
     }
   }
-  res.sort((a,b)=>a.total-b.total);
+  // ordem: menor preço; no empate, menor prazo
+  const prazoN=x=>{ const m=String(x.rv.prazo||x.r.prazo||'').match(/\d+/); return m?+m[0]:999; };
+  res.sort((a,b)=>(a.total-b.total)||(prazoN(a)-prazoN(b)));
   ULT={uf,peso,nf,pt,m3,icms:op.icms,res,nao};
   if(onReq) agendarOnline(onReq,onChave);
   desenharProgresso(onReq?onChave:null,nBase);
@@ -242,6 +244,15 @@ function calc(){
     const k=res.findIndex(x=>x.t.transportadora===(sel.dataset.escolhida||'')); sel.value=String(k>=0?k:0); }
   if(res.length) $('s_status').textContent='';
   if(res.length&&API_OK) desenharManualCalc();
+  // Todas as transportadoras aparecem na lista: as que não cotaram vêm no fim, com o motivo.
+  const xOn=onChave&&ONL.atual&&ONL.atual.chave===onChave?ONL.atual:null;
+  const semCot=[
+    ...ONL.integ.filter(ig=>onReq&&!ig.tabela&&(!xOn||xOn.pend.has(ig.id))).map(ig=>({nome:ig.transportadora,motivo:'consultando online…',pend:true})),
+    ...nao.map(n=>({nome:n.t.transportadora,motivo:n.naoAtendeOnline?'não atende este destino (informado pela transportadora)':(n.msg||'sem cotação')}))
+  ].sort((a,b)=>(b.pend?1:0)-(a.pend?1:0)||a.nome.localeCompare(b.nome,'pt-BR'));
+  const cardsSem=semCot.map((n,k)=>`<div class="r sem"><div class="rh"><div class="pos">${res.length+k+1}</div>
+      <div class="nm"><b>${esc(n.nome)}</b><span>${n.pend?'<span class="gira-mini"></span> ':''}${esc(n.motivo)}</span></div>
+      <div class="prz">—<small>prazo</small></div><div class="val">—<small>${n.pend?'aguardando':'sem cotação'}</small></div></div></div>`).join('');
   const simples=$('simples').checked;
   $('out').classList.toggle('simple',simples); $('avisos').classList.toggle('hide',simples);
   if(simples){
@@ -250,8 +261,7 @@ function calc(){
       <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?(x.t.tabelaDesatualizada?' <span class="aviso">tabela desatualizada · aguarde a cotação online…</span>':' consultando online…'):(x.t.tabelaDesatualizada?' <span class="aviso">online indisponível · tabela desatualizada, confira o valor</span>':' online indisponível')):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
-    if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
-    if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>esc(n.t.transportadora)+(n.naoAtendeOnline?' (informou que não atende este destino)':'')).join(', ')}</div>`;
+    h+=cardsSem;
     $('out').innerHTML=h+onStatus(onChave); return;
   }
   let h=res.map((x,k)=>{
@@ -269,10 +279,9 @@ function calc(){
       ${x.api?'':`<tr><td>Subtotal</td><td></td><td class="n">${brl(x.sub)}</td></tr>`}
       ${x.icms?`<tr><td>ICMS</td><td class="small">${x.al}% por dentro</td><td class="n">${brl(x.icms)}</td></tr>`:''}${x.semIcms?`<tr><td>ICMS</td><td class="small">não cobrado pela transportadora neste destino</td><td class="n">—</td></tr>`:''}
       <tr class="tot"><td>Total</td><td></td><td class="n">${brl(x.total)}</td></tr></table></div></div>`;}).join('');
-  if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
-  if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>`<b>${n.t.transportadora}</b> – ${n.msg}`).join('<br>')}</div>`;
+  h+=cardsSem;
   $('out').innerHTML=h+onStatus(onChave);
-  $('out').querySelectorAll('.rh').forEach(e=>e.onclick=()=>e.parentNode.classList.toggle('open'));
+  $('out').querySelectorAll('.r:not(.sem) .rh').forEach(e=>e.onclick=()=>e.parentNode.classList.toggle('open'));
   $('out').querySelectorAll('.det select').forEach(s=>{ s.onclick=e=>e.stopPropagation(); s.onchange=()=>{override[s.dataset.t]=+s.value;calc();}; });
   const b=$('out').querySelector('.r'); if(b) b.classList.add('open');
   const av=[];

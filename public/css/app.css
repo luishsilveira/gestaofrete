@@ -253,3 +253,11 @@ label.perm input:disabled+span{color:var(--mut)}
 .chip-pend{display:inline-flex;align-items:center;gap:5px;background:var(--accs);color:var(--azul);border-radius:12px;padding:1px 9px;font-size:12px}
 .chip-erro{display:inline-flex;background:var(--warns);color:var(--warn);border-radius:12px;padding:1px 9px;font-size:12px}
 .chip-info{display:inline-flex;background:#eef1f5;color:#4a5a6c;border-radius:12px;padding:1px 9px;font-size:12px}
+
+/* transportadoras sem cotação: no fim da lista, apagadas */
+.r.sem{background:#f7f8fa;border-style:dashed}
+.r.sem .rh{cursor:default}
+.r.sem .nm b{color:var(--mut)}
+.r.sem .pos{background:#e9edf2;color:var(--mut)}
+.r.sem .val,.r.sem .prz{color:var(--mut)}
+.gira-mini{display:inline-block;width:10px;height:10px;border:2px solid #cfd8e3;border-top-color:var(--azul);border-radius:50%;animation:gira .8s linear infinite;vertical-align:-1px}
