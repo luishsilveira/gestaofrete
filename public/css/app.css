@@ -209,6 +209,9 @@ input:focus,select:focus{outline:2px solid var(--lima);outline-offset:-1px;borde
 .perms label{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:3px 0;break-inside:avoid}
 .inativo td{color:var(--mut)}
 #menu .usuario span{color:#7f93a8;font-size:11px}
+#menu .usuario a{color:#9cc01c;text-decoration:none}
+#menu .usuario a:hover{text-decoration:underline}
+#menu .usuario + .usuario{border-top:0;padding-top:0}
 
 /* janela de edição (usuários e perfis) */
 #modal{position:fixed;inset:0;background:rgba(10,32,54,.45);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}

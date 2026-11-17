@@ -728,6 +728,12 @@ async function api(path,opt){ const r=await fetch(path,opt); let j=null; try{ j=
   if(!r.ok){ const e=Object.assign(new Error((j&&j.erro)||('HTTP '+r.status)),{codigo:j&&j.codigo,status:r.status});
     if(['nao_cadastrado','inativo'].includes(e.codigo)) bloquear(e.message); else if(e.codigo==='sem_permissao') setTimeout(reverPermissoes,0);
     throw e; } return j; }
+// Sair: encerra a sessão do Cloudflare Access na aplicação e no domínio do time; sem isso o navegador volta sempre com o mesmo e-mail.
+const ACCESS_TIME='https://odd-salad-41a5.cloudflareaccess.com';
+async function sairAccess(ev){ if(ev) ev.preventDefault();
+  try{ await fetch('/cdn-cgi/access/logout',{credentials:'include',redirect:'manual'}); }catch(e){}
+  location.href=ACCESS_TIME+'/cdn-cgi/access/logout'; }
+$('sair').onclick=sairAccess; $('bloqueio_sair').onclick=sairAccess;
 // Usuário bloqueado ou removido: tela de acesso não autorizado, mesmo com a página já aberta.
 function bloquear(msg){ $('bloqueio_msg').textContent=msg; $('bloqueio').classList.remove('hide'); $('menu').classList.add('hide'); $('conteudo').classList.add('hide'); }
 // Permissões do perfil conferidas de novo a cada 2 minutos e quando o servidor recusa algo: o menu acompanha o que o administrador mudar.
