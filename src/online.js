@@ -1,6 +1,6 @@
 // Cotação online nas transportadoras: junta os conectores de src/apis/, guarda a configuração
 // (integrações ativas, empresa remetente) e registra todas as consultas em api_consultas.
-import { so, slug, lerJSONSecret, CEP_ORIGEM_PADRAO, normalizarPedido, validarPedido, comTempoLimite } from './apis/comum.js';
+import { so, slug, lerJSONSecret, tipoDoErro, CEP_ORIGEM_PADRAO, normalizarPedido, validarPedido, comTempoLimite } from './apis/comum.js';
 import { lerCredenciais, CAMPOS } from './credenciais.js';
 import * as braspress from './apis/braspress.js';
 import * as ssw from './apis/ssw.js';
@@ -180,11 +180,11 @@ async function cotarUma(env, db, integ, req, usuario, { fetchImpl = fetch, semCa
   try {
     r = await comTempoLimite(conector(integ.tipo).cotar(integ, req, fetchImpl), TEMPO_LIMITE_MS, `${integ.transportadora}: sem resposta em ${TEMPO_LIMITE_MS / 1000} s.`);
   } catch (e) {
-    r = { erro: e.message || String(e), requisicao: e.requisicao, resposta: e.resposta };
+    r = { erro: e.message || String(e), tipoErro: tipoDoErro(e), mensagem: e.mensagem || null, requisicao: e.requisicao, resposta: e.resposta };
   }
   const ms = Date.now() - ini;
   await registrar(db, integ, req, chave, usuario, r, ms, teste);
-  return r.erro ? { ...base, ok: false, erro: r.erro, ms } : { ...base, ok: true, total: r.total, prazo: r.prazo, id: r.id, obs: r.obs || null, ms };
+  return r.erro ? { ...base, ok: false, erro: r.erro, tipoErro: r.tipoErro, mensagem: r.mensagem, ms } : { ...base, ok: true, total: r.total, prazo: r.prazo, id: r.id, obs: r.obs || null, ms };
 }
 
 // Cota em todas as integrações ativas, em paralelo.

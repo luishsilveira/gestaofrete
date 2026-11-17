@@ -46,7 +46,9 @@ export async function cotar(integ, req, fetchImpl = fetch) {
   if (resp.status === 401 || resp.status === 403) throw new Error('A Braspress recusou o usuário e a senha deste CNPJ.');
   if (!resp.ok || !j || j.totalFrete == null) {
     const lista = j && Array.isArray(j.errorList) ? j.errorList.map((e) => e.message || e).join('; ') : '';
-    throw Object.assign(new Error(`Braspress: ${(j && j.message) || 'erro'}${lista ? ' – ' + lista : ''} (HTTP ${resp.status}).`), { requisicao: corpo, resposta: j });
+    // 4xx com mensagem da Braspress = recusa dela (ex.: CEP não atendido); 5xx/sem JSON = falha técnica
+    const respondeu = resp.status >= 400 && resp.status < 500 && !!(j && (j.message || lista));
+    throw Object.assign(new Error(`Braspress: ${(j && j.message) || 'erro'}${lista ? ' – ' + lista : ''} (HTTP ${resp.status}).`), { requisicao: corpo, resposta: j, respondeu, mensagem: [j && j.message, lista].filter(Boolean).join(' – ') || null });
   }
   return { total: +j.totalFrete, prazo: parseInt(j.prazo, 10) || null, id: j.id != null ? String(j.id) : null,
     requisicao: corpo, resposta: j, obs: corpo.cnpjDestinatario === +DESTINATARIO_GENERICO ? 'sem destinatário (só CEP)' : null };

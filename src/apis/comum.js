@@ -72,3 +72,13 @@ export async function comTempoLimite(promessa, ms, msg) {
   let t;
   return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
 }
+
+// Tipo do erro de uma cotação online, para a tela explicar direito:
+//   'nao_atende' – a transportadora respondeu que não atende o destino (CEP/cidade/região)
+//   'recusou'    – a transportadora respondeu com outra recusa (ex.: peso acima do limite, cliente sem tabela)
+//   'falha'      – não houve resposta útil (rede, tempo esgotado, login, erro do servidor)
+const NAO_ATENDE = /n[ãa]o\s+(atend|h[áa]\s+atendimento|possui\s+atendimento|aten[dt])|sem\s+atendimento|fora\s+da\s+(área|area|abrang)|n[ãa]o\s+(é|e)\s+atendid|localidade\s+(n[ãa]o|inv[áa]lida)|cep\s+(de\s+)?destino\s+(n[ãa]o|inv[áa]lid)|destino\s+n[ãa]o|n[ãa]o\s+(entrega|coleta|trabalha)|sem\s+cobertura|não\s+abrang/i;
+export function tipoDoErro(e) {
+  if (!e || !e.respondeu) return 'falha';
+  return NAO_ATENDE.test(e.message || '') ? 'nao_atende' : 'recusou';
+}

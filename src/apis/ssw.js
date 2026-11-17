@@ -66,9 +66,10 @@ export function lerResposta(texto) {
   const ret = r0 != null ? desescXml(r0) : texto;
   const erro = tag(ret, 'erro');
   const msg = tag(ret, 'mensagem');
-  if (erro != null && erro !== '0') throw new Error('SSW: ' + (msg || `erro ${erro}`));
+  // recusa da própria transportadora (ex.: destino não atendido): a mensagem vem dela
+  if (erro != null && erro !== '0') throw Object.assign(new Error('SSW: ' + (msg || `erro ${erro}`)), { respondeu: true, mensagem: msg || `erro ${erro}` });
   const total = numeroBR(tag(ret, 'totalFrete', 'frete', 'valorFrete'));
-  if (!(total > 0)) throw new Error('SSW: ' + (msg || 'resposta sem valor de frete'));
+  if (!(total > 0)) throw Object.assign(new Error('SSW: ' + (msg || 'resposta sem valor de frete')), { respondeu: !!msg, mensagem: msg || null });
   return { total, prazo: parseInt(tag(ret, 'prazo'), 10) || null, id: tag(ret, 'cotacao', 'numeroCotacao', 'nroCotacao') };
 }
 

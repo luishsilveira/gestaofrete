@@ -252,3 +252,4 @@ label.perm input:disabled+span{color:var(--mut)}
 @keyframes gira{to{transform:rotate(360deg)}}
 .chip-pend{display:inline-flex;align-items:center;gap:5px;background:var(--accs);color:var(--azul);border-radius:12px;padding:1px 9px;font-size:12px}
 .chip-erro{display:inline-flex;background:var(--warns);color:var(--warn);border-radius:12px;padding:1px 9px;font-size:12px}
+.chip-info{display:inline-flex;background:#eef1f5;color:#4a5a6c;border-radius:12px;padding:1px 9px;font-size:12px}

@@ -220,6 +220,12 @@ function calc(){
           it:[{n:`Frete total informado pela ${o.transportadora}`,d:`cotação nº ${o.id||'—'} · válida no dia${x.remetente&&x.remetente.nome?' · remetente '+x.remetente.nome:''}${x.destinatarioGenerico?' · sem destinatário (só CEP)':''}`,v:o.total}].concat(
             tb?[{n:'Diferença para a tabela (só informativo)',d:`pela tabela: ${brl(tb.total)} (praça ${tb.r.regiao})`,v:o.total-tb.total}]:[])};
         if(ib>=0) res.splice(ib,1,on); else { res.push(on); const k=nao.findIndex(n=>n.t.id===ig.tabela); if(k>=0) nao.splice(k,1); }
+      } else if(o&&!o.ok&&o.tipoErro==='nao_atende'){
+        // a própria transportadora informou que não atende o destino: sai do ranking (mesmo que a tabela tenha preço)
+        if(ib>=0) res.splice(ib,1);
+        nao.push({naoAtendeOnline:true,t:tb?tb.t:{id:'api-'+ig.id,transportadora:o.transportadora},msg:`não atende este destino (informado pela transportadora${o.mensagem?': '+o.mensagem:''})`});
+      } else if(o&&!o.ok&&!tb){
+        nao.push({t:{id:'api-'+ig.id,transportadora:o.transportadora},msg:o.tipoErro==='recusou'?`recusou a cotação: ${o.mensagem||o.erro}`:`sem resposta da API (${o.erro})`});
       } else if(tb){
         const erro=o&&!o.ok?o.erro:(pend?'consulta online em andamento':'sem resposta da API');
         tb.on={fonte:'tabela',online:null,tabela:+tb.total.toFixed(2),praca_tabela:tb.r.regiao,id:null,prazo:null,erro};
@@ -245,7 +251,7 @@ function calc(){
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     if(!res.length) h+='<div class="na">Nenhuma tabela atende esse destino.</div>';
-    if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>n.t.transportadora).join(', ')}</div>`;
+    if(nao.length) h+=`<div class="na">Sem cotação: ${nao.map(n=>esc(n.t.transportadora)+(n.naoAtendeOnline?' (informou que não atende este destino)':'')).join(', ')}</div>`;
     $('out').innerHTML=h+onStatus(onChave); return;
   }
   let h=res.map((x,k)=>{
@@ -313,20 +319,24 @@ function desenharProgresso(chave,nTabelas){
   // transportadoras: as de tabela (já calculadas) + as só online (sem tabela)
   const total=nTabelas+online.filter(i=>!i.tabela).length, feitas=total-pend.length;
   const falhas=x?online.filter(i=>x.resultados[i.id]&&!x.resultados[i.id].ok):[];
+  const chip=i=>{ const r=x.resultados[i.id], tip=esc(r.mensagem||r.erro);
+    if(r.tipoErro==='nao_atende') return `<span class="chip-info" title="${tip}">${esc(i.transportadora)}: não atende este destino</span>`;
+    if(r.tipoErro==='recusou') return `<span class="chip-info" title="${tip}">${esc(i.transportadora)}: ${esc((r.mensagem||'recusou a cotação').slice(0,60))}</span>`;
+    return `<span class="chip-erro" title="${tip}">${esc(i.transportadora)}: sem resposta da API${i.tabela?' (valor da tabela)':''}</span>`; };
   const pct=total?Math.round(feitas/total*100):100, fim=!pend.length;
   el.classList.remove('hide'); el.classList.toggle('ok',fim);
   el.querySelector('.pg-txt').innerHTML=`<span class="gira"></span><span class="marca-ok">✓</span>
     <span>${fim?'Todas as cotações concluídas':'Cotando…'} <b>${feitas} de ${total}</b> (${pct}%)</span>
     ${online.length?`<span class="small">${fim?(x&&x.fim&&x.ini?`· online em ${((x.fim-x.ini)/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})} s`:''):'· aguardando:'}</span>`:''}
     ${pend.map(i=>`<span class="chip-pend">${esc(i.transportadora)}</span>`).join('')}
-    ${falhas.length?`<span class="esp"></span>${falhas.map(i=>`<span class="chip-erro" title="${esc(x.resultados[i.id].erro)}">${esc(i.transportadora)}: online indisponível</span>`).join('')}`:''}`;
+    ${falhas.length?`<span class="esp"></span>${falhas.map(chip).join('')}`:''}`;
   el.querySelector('.pg-barra i').style.width=pct+'%';
 }
 function onStatus(chave){
   if(!ONL.integ.length||!chave) return '';
   const x=ONL.atual&&ONL.atual.chave===chave?ONL.atual:null; if(!x) return '';
-  const f=Object.values(x.resultados).filter(r=>!r.ok);
-  return f.length?`<div class="na"><b>Cotação online indisponível</b> – ${f.map(r=>`${esc(r.transportadora)}: ${esc(r.erro)}`).join('<br>')}</div>`:'';
+  const f=Object.values(x.resultados).filter(r=>!r.ok&&r.tipoErro!=='nao_atende'&&r.tipoErro!=='recusou');
+  return f.length?`<div class="na"><b>Sem resposta da API</b> (problema de conexão, não de atendimento) – ${f.map(r=>`${esc(r.transportadora)}: ${esc(r.erro)}`).join('<br>')}</div>`:'';
 }
 async function iniciarOnline(){
   try{ const s=await api('/api/online/status'); ONL.integ=s.integracoes.filter(i=>i.ativa); if(ONL.integ.length) calc(); }catch(e){ /* sem API */ }
