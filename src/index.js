@@ -591,7 +591,7 @@ export default {
       // resultado das vendas em marketplace (src/marketplace.js)
       if (url.pathname === '/api/marketplace') {
         const q = url.searchParams;
-        return json(await comBanco(env, ctx, (db) => analisarMarketplace(db, { de: q.get('de'), ate: q.get('ate'), canal: q.get('canal'), descontarIpi: q.get('ipi') !== '0' })));
+        return json(await comBanco(env, ctx, (db) => analisarMarketplace(db, { de: q.get('de'), ate: q.get('ate'), canal: q.get('canal'), descontarIpi: q.get('ipi') === '1' })));
       }
       if (url.pathname === '/api/marketplace/fixos') {
         if (request.method === 'POST') { const d = await corpoJson(); await comBanco(env, ctx, (db) => salvarFixos(db, d.fixos, usuario)); }

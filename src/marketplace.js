@@ -47,7 +47,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
   const de = dataOk(opcoes.de) ? opcoes.de : new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const ate = dataOk(opcoes.ate) ? opcoes.ate : new Date().toISOString().slice(0, 10);
   const canal = opcoes.canal || 'Mercado Livre';
-  const descontarIpi = opcoes.descontarIpi !== false;
+  const descontarIpi = opcoes.descontarIpi === true;
 
   const params = [de, ate];
   let filtroCanal;
