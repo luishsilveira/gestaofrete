@@ -6,7 +6,7 @@
 // Opcionais: "id" (identificador interno), "tabela" (id da tabela de frete da mesma transportadora,
 // para comparar online × tabela), "senhaPagador", "mercadoria" (código, padrão 1) e "extras" (outros
 // parâmetros do web service, repassados como estão).
-import { so, lerJSONSecret, slug, numeroBR } from './comum.js';
+import { so, lerJSONSecret, slug, numeroBR, limparTexto } from './comum.js';
 
 export const tipo = 'ssw';
 export const URL = 'https://ssw.inf.br/ws/sswCotacao/index.php';
@@ -61,11 +61,11 @@ export function envelope(w, params) {
 // Lê a resposta SOAP: o retorno vem como texto com o XML <cotacao> escapado dentro de <return>.
 export function lerResposta(texto) {
   const falha = tag(texto, 'faultstring');
-  if (falha) throw new Error('SSW: ' + falha);
+  if (falha) throw new Error('SSW: ' + limparTexto(falha));
   const r0 = bloco(texto, 'return');
   const ret = r0 != null ? desescXml(r0) : texto;
   const erro = tag(ret, 'erro');
-  const msg = tag(ret, 'mensagem');
+  const msg = limparTexto(tag(ret, 'mensagem'));
   // recusa da própria transportadora (ex.: destino não atendido): a mensagem vem dela
   if (erro != null && erro !== '0') throw Object.assign(new Error('SSW: ' + (msg || `erro ${erro}`)), { respondeu: true, mensagem: msg || `erro ${erro}` });
   const total = numeroBR(tag(ret, 'totalFrete', 'frete', 'valorFrete'));

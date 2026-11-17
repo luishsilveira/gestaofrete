@@ -73,6 +73,27 @@ export async function comTempoLimite(promessa, ms, msg) {
   return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
 }
 
+// Mensagens das transportadoras chegam com HTML (ex.: SSW: "&nbsp;A CIDADE DE DESTINO N&Atilde;O &Eacute; ATENDIDA.<br>").
+// Converte entidades (nomeadas e numéricas), tira as tags e os espaços sobrando.
+const ENTIDADES = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", ordm: 'º', ordf: 'ª', deg: '°', ndash: '–', mdash: '—', hellip: '…', laquo: '«', raquo: '»' };
+const ACENTOS = { acute: '\u0301', grave: '\u0300', circ: '\u0302', tilde: '\u0303', uml: '\u0308', cedil: '\u0327' };
+export function limparTexto(t) {
+  if (t == null) return t;
+  let s = String(t);
+  for (let i = 0; i < 2; i++) { // às vezes vem codificado duas vezes (&amp;Atilde;)
+    s = s.replace(/&#x([0-9a-f]+);?/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+      .replace(/&#(\d+);?/g, (_, d) => String.fromCodePoint(+d))
+      .replace(/&([a-z]+);/gi, (m, n) => {
+        if (ENTIDADES[n.toLowerCase()] != null) return ENTIDADES[n.toLowerCase()];
+        const a = n.match(/^([a-z])(acute|grave|circ|tilde|uml|cedil)$/i); // Atilde → Ã, Eacute → É, ccedil → ç
+        if (a) return (a[1] + ACENTOS[a[2].toLowerCase()]).normalize('NFC');
+        if (/^(aelig|szlig)$/i.test(n)) return n.toLowerCase() === 'szlig' ? 'ß' : 'æ';
+        return m;
+      });
+  }
+  return s.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
 // Tipo do erro de uma cotação online, para a tela explicar direito:
 //   'nao_atende' – a transportadora respondeu que não atende o destino (CEP/cidade/região)
 //   'recusou'    – a transportadora respondeu com outra recusa (ex.: peso acima do limite, cliente sem tabela)

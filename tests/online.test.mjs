@@ -73,9 +73,9 @@ t('repetição no dia: cache, sem chamar', r.j.resultados.every((x) => x.doCache
 leo = () => sswResp('<cotacao><erro>1</erro><mensagem>Cliente sem tabela</mensagem></cotacao>');
 r = await api('/api/online/cotar', 'POST', { ...corpo, peso: 20 });
 t('uma falha, a outra responde', r.j.resultados.find((x) => x.integracao === 'braspress').ok && r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').erro === 'SSW: Cliente sem tabela' && r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').tipoErro === 'recusou');
-leo = () => sswResp('<cotacao><erro>1</erro><mensagem>CEP destino nao atendido</mensagem></cotacao>');
+leo = () => sswResp('<cotacao><erro>1</erro><mensagem>&amp;nbsp;A CIDADE DE DESTINO N&amp;Atilde;O &amp;Eacute; ATENDIDA.&lt;br&gt;</mensagem></cotacao>');
 r = await api('/api/online/cotar', 'POST', { ...corpo, peso: 20.5 });
-t('não atende: tipo nao_atende com a mensagem', r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').tipoErro === 'nao_atende' && r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').mensagem === 'CEP destino nao atendido');
+t('não atende: tipo nao_atende com a mensagem', r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').tipoErro === 'nao_atende' && r.j.resultados.find((x) => x.integracao === 'ssw-expresso-leomar').mensagem === 'A CIDADE DE DESTINO NÃO É ATENDIDA.');
 leo = () => sswResp('<cotacao><erro>1</erro><mensagem>Cliente sem tabela</mensagem></cotacao>');
 
 // ---- desativar e testar
