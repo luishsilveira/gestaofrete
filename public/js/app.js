@@ -977,6 +977,7 @@ async function previaEnvioBling(cotId){
       <table class="mini mt"><tr><th></th><th>Hoje no Bling</th><th>Depois do envio</th></tr>
         ${linhaAntesDepois('Valor do frete',p.antes.frete!=null?brl(+p.antes.frete):'—',`<b>${brl(p.valor_enviado)}</b><br><span class="small">custo ${brl(p.valor_custo)} + ${String(p.acrescimo_pct).replace('.',',')}%</span>`)}
         ${linhaAntesDepois('Transportador',p.antes.transportadorId?'código '+p.antes.transportadorId:'—',tr)}
+        ${linhaAntesDepois('Observações<br><span class="small">(saem na proposta impressa)</span>',preTxt(p.antes.observacoes),preTxt(p.depois.observacoes))}
         ${linhaAntesDepois('Observação interna',preTxt(p.antes.observacaoInterna),preTxt(p.depois.observacaoInterna))}
       </table>
       ${p.envios.length?`<p class="small">Envios anteriores desta cotação: ${p.envios.map(x=>`${horaBR(x.criado_em)} por ${esc(x.usuario)} (${x.ok?'ok':'com problema'})`).join(' · ')}</p>`:''}
@@ -989,7 +990,7 @@ async function previaEnvioBling(cotId){
         $('eb_status').innerHTML='';
         $('eb_ok').remove();
         $('modal').querySelector('.modal-corpo').insertAdjacentHTML('beforeend',`<div class="${r.ok?'vinculo':'note'}" style="margin-top:12px"><b>${r.ok?'Proposta atualizada no Bling.':'O Bling aceitou, mas confira a proposta:'}</b><br>
-          Observação interna: ${m(c.observacao)} · Valor do frete (${brl(r.valor_enviado)}): ${m(c.frete)} · Transportador: ${m(c.transportador)} · Itens: ${c.itens===false?'<span class="err">✗ mudaram</span>':'✓ mantidos'}
+          Observações: ${m(c.observacoes)} · Observação interna: ${m(c.observacao)} · Valor do frete (${brl(r.valor_enviado)}): ${m(c.frete)} · Transportador: ${m(c.transportador)} · Itens: ${c.itens===false?'<span class="err">✗ mudaram</span>':'✓ mantidos'}
           ${c.total_antes!=null?`<br>Total da proposta: ${brl(+c.total_antes)} → ${brl(+c.total_depois)}`:''}</div>`);
         $('eb_fechar').textContent='Fechar';
       }catch(e){ $('eb_ok').disabled=false; $('eb_status').className='small err'; $('eb_status').textContent=e.message; }

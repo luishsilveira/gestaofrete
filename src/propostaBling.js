@@ -6,7 +6,10 @@
 //   - observacaoInterna: bloco "Frete cotado" com transportadora, nº da cotação online, valor de custo e prazo
 //     (o texto que já existir no campo é mantido; só o bloco anterior é trocado);
 //   - transporte.frete: valor da transportadora + acréscimo % do cadastro de transportadoras;
-//   - transportador: contato do Bling informado no cadastro de transportadoras (quando houver).
+//   - transportador: contato do Bling informado no cadastro de transportadoras (quando houver);
+//   - observacoes (sai na proposta impressa): linha compacta "cotação/valor.prazo", ex.: 23569/18715.4
+//     (nº da cotação online, quando houver; custo sem acréscimo só com os dígitos; prazo em dias).
+//     O resto do campo é mantido; num novo envio, a linha enviada antes é trocada.
 // A API do Bling (PUT) exige a proposta inteira: lemos a atual, trocamos só esses campos e devolvemos o resto.
 // Depois do envio, a proposta é lida de novo para conferir o que o Bling gravou de fato.
 import { BLING, BlingErro, blingGet, tokenValido } from './bling.js';
@@ -33,10 +36,13 @@ CREATE TABLE IF NOT EXISTS bling_envios (
   valor_enviado    NUMERIC(14,2),
   transportador_id BIGINT,
   observacao       TEXT,
+  obs_cliente      TEXT,
   ok               BOOLEAN NOT NULL,
   erro             TEXT,
   conferencia      JSONB
 );
+ALTER TABLE bling_envios ADD COLUMN IF NOT EXISTS obs_cliente TEXT;
+CREATE INDEX IF NOT EXISTS bling_envios_proposta_idx ON bling_envios (proposta_id, criado_em DESC);
 CREATE INDEX IF NOT EXISTS bling_envios_cotacao_idx ON bling_envios (cotacao_id, criado_em DESC);
 `;
 
@@ -121,6 +127,20 @@ export function juntarObservacao(atual, bloco) {
   if (i >= 0 && f >= 0) return (txt.slice(0, i) + bloco + txt.slice(f + FIM.length)).trim();
   return txt.trim() ? txt.trimEnd() + '\n\n' + bloco : bloco;
 }
+// Linha compacta do campo Observações: "cotação/valor.prazo" (23569/18715.4; sem cotação: /18715.4).
+export function linhaCompacta({ valor, prazo, cotacaoOnline }) {
+  const digitos = (+valor).toFixed(2).replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  const dias = String(prazo ?? '').match(/\d+/);
+  return `${cotacaoOnline ? String(cotacaoOnline).trim() : ''}/${digitos}${dias ? '.' + dias[0] : ''}`;
+}
+// Mantém o texto do campo; troca a linha enviada antes (se ainda estiver lá) ou acrescenta numa linha nova.
+export function juntarCompacto(atual, linha, enviadasAntes = []) {
+  const linhas = String(atual || '').split(/\r?\n/);
+  const i = linhas.findIndex((l) => enviadasAntes.includes(l.trim()));
+  if (i >= 0) { linhas[i] = linha; return linhas.join('\n').trim(); }
+  const txt = String(atual || '').trimEnd();
+  return txt ? txt + '\n' + linha : linha;
+}
 // Onde está o transportador no JSON da proposta (o Bling usa "contato" dentro de "transporte").
 const chaveTransportador = (tr) => (tr && 'transportador' in tr && !('contato' in tr) ? 'transportador' : 'contato');
 const idTransportador = (tr) => {
@@ -140,9 +160,10 @@ async function dadosDaCotacao(db, cotacaoId) {
   if (!transportadora || !(valor > 0)) throw erro('A cotação não tem transportadora e valor escolhidos.');
   const res = (Array.isArray(c.resultados) ? c.resultados : []).find((x) => x.transportadora === transportadora) || {};
   const cad = (await db.query('SELECT * FROM transportadoras_cadastro WHERE nome = $1', [transportadora])).rows[0] || null;
+  const enviadasAntes = (await db.query('SELECT DISTINCT obs_cliente FROM bling_envios WHERE proposta_id = $1 AND obs_cliente IS NOT NULL', [c.bling_proposta_id])).rows.map((x) => x.obs_cliente);
   return {
     c, transportadora, valor: r2(valor), prazo: res.prazo || (transportadora === c.melhor_transportadora ? c.melhor_prazo : null),
-    cotacaoOnline: res.fonte_valor === 'online' && res.cotacao_online ? String(res.cotacao_online) : null, cad,
+    cotacaoOnline: res.fonte_valor === 'online' && res.cotacao_online ? String(res.cotacao_online) : null, cad, enviadasAntes,
   };
 }
 
@@ -151,17 +172,19 @@ export function montarProposta(atual, d) {
   const pct = d.cad ? +d.cad.acrescimo_pct || 0 : 0;
   const valorEnviado = r2(d.valor * (1 + pct / 100));
   const bloco = blocoObservacao(d);
+  const compacto = linhaCompacta(d);
   const novo = structuredClone(atual);
   novo.observacaoInterna = juntarObservacao(atual.observacaoInterna, bloco);
+  novo.observacoes = juntarCompacto(atual.observacoes, compacto, d.enviadasAntes || []);
   novo.transporte = { ...(atual.transporte || {}) };
   novo.transporte.frete = valorEnviado;
   const tid = d.cad && d.cad.bling_contato_id ? +d.cad.bling_contato_id : null;
   if (tid) novo.transporte[chaveTransportador(atual.transporte)] = { id: tid };
   const tr0 = atual.transporte || {};
   return {
-    corpo: novo, valorEnviado, pct, transportadorId: tid, bloco,
-    antes: { observacaoInterna: atual.observacaoInterna || '', frete: tr0.frete ?? null, transportadorId: idTransportador(tr0), total: atual.total ?? null },
-    depois: { observacaoInterna: novo.observacaoInterna, frete: valorEnviado, transportadorId: tid ?? idTransportador(tr0) },
+    corpo: novo, valorEnviado, pct, transportadorId: tid, bloco, compacto,
+    antes: { observacoes: atual.observacoes || '', observacaoInterna: atual.observacaoInterna || '', frete: tr0.frete ?? null, transportadorId: idTransportador(tr0), total: atual.total ?? null },
+    depois: { observacoes: novo.observacoes, observacaoInterna: novo.observacaoInterna, frete: valorEnviado, transportadorId: tid ?? idTransportador(tr0) },
   };
 }
 
@@ -225,10 +248,10 @@ export async function enviarProposta(env, db, cotacaoId, usuario, fetchImpl = fe
   const m = montarProposta(atual, d);
   const reg = (ok, erroMsg, conferencia) => db.query(
     `INSERT INTO bling_envios (usuario, cotacao_id, proposta_id, proposta_numero, transportadora, valor_custo, acrescimo_pct,
-       valor_enviado, transportador_id, observacao, ok, erro, conferencia)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, criado_em`,
+       valor_enviado, transportador_id, observacao, obs_cliente, ok, erro, conferencia)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, criado_em`,
     [usuario, cotacaoId, d.c.bling_proposta_id, numero, d.transportadora, d.valor, m.pct, m.valorEnviado, m.transportadorId,
-      m.bloco, ok, erroMsg, conferencia ? JSON.stringify(conferencia) : null]);
+      m.bloco, m.compacto, ok, erroMsg, conferencia ? JSON.stringify(conferencia) : null]);
   try {
     await blingPut(token, `/propostas-comerciais/${d.c.bling_proposta_id}`, m.corpo, fetchImpl);
   } catch (e) {
@@ -240,12 +263,13 @@ export async function enviarProposta(env, db, cotacaoId, usuario, fetchImpl = fe
   const tr = depois.transporte || {};
   const conferencia = {
     observacao: String(depois.observacaoInterna || '').includes(m.bloco),
+    observacoes: String(depois.observacoes || '').split(/\r?\n/).some((l) => l.trim() === m.compacto),
     frete: Math.abs((+tr.frete || 0) - m.valorEnviado) < 0.005,
     transportador: m.transportadorId ? idTransportador(tr) === m.transportadorId : null,
     itens: Array.isArray(atual.itens) && Array.isArray(depois.itens) ? atual.itens.length === depois.itens.length : null,
     total_antes: atual.total ?? null, total_depois: depois.total ?? null,
   };
-  const ok = conferencia.observacao && conferencia.frete && conferencia.transportador !== false && conferencia.itens !== false;
+  const ok = conferencia.observacao && conferencia.observacoes && conferencia.frete && conferencia.transportador !== false && conferencia.itens !== false;
   const r = await reg(ok, ok ? null : 'O Bling aceitou, mas nem todos os campos ficaram como enviados (ver conferência).', conferencia);
   try { await db.query('UPDATE propostas_bling SET frete = $2 WHERE id = $1', [d.c.bling_proposta_id, +tr.frete || null]); } catch { /* lista local se atualiza na próxima importação */ }
   return { ok, envio: r.rows[0], proposta: { id: d.c.bling_proposta_id, numero }, valor_enviado: m.valorEnviado, conferencia };

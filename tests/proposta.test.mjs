@@ -4,7 +4,7 @@ import { psql } from './pgpsql.mjs';
 import { cadastrarAdmins } from './usuarios.mjs';
 import worker from '../src/index.js';
 import { BLING, definirRitmoBling } from '../src/bling.js';
-import { juntarObservacao, blocoObservacao } from '../src/propostaBling.js';
+import { juntarObservacao, blocoObservacao, linhaCompacta, juntarCompacto } from '../src/propostaBling.js';
 definirRitmoBling({ intervalo: 0, esperasLimite: [1, 1] });
 
 let ok = 0, fail = 0; const t = (n, c) => { c ? ok++ : fail++; console.log((c ? 'OK  ' : 'FALHA ') + n); };
@@ -26,12 +26,17 @@ t('mantém o texto do vendedor e acrescenta o bloco', ob1.startsWith('Cliente pe
 const b2 = blocoObservacao({ transportadora: 'Rodonaves', valor: 100, prazo: '2' });
 const ob2 = juntarObservacao(ob1 + '\nOutra nota depois', b2);
 t('troca só o bloco anterior', ob2.includes('Cliente pediu entrega') && ob2.includes('Outra nota depois') && ob2.includes('Rodonaves') && !ob2.includes('Braspress'));
+t('linha compacta do exemplo', linhaCompacta({ valor: 187.15, prazo: '4', cotacaoOnline: '23569' }) === '23569/18715.4');
+t('linha compacta sem cotação', linhaCompacta({ valor: 187.15, prazo: 4 }) === '/18715.4');
+t('linha compacta: milhar e centavos', linhaCompacta({ valor: 1234.5, prazo: '10 dias' }) === '/123450.10' && linhaCompacta({ valor: 0.5, prazo: null }) === '/50');
+t('observações: acrescenta numa linha nova', juntarCompacto('Validade 10 dias', '1/2.3') === 'Validade 10 dias\n1/2.3' && juntarCompacto('', '1/2.3') === '1/2.3');
+t('observações: troca a linha enviada antes', juntarCompacto('Validade\n1/2.3\nfim', '9/9.9', ['1/2.3']) === 'Validade\n9/9.9\nfim');
 t('campo vazio: só o bloco', juntarObservacao('', b2) === b2 && juntarObservacao(null, b2) === b2);
 
 // ---------- Bling simulado (proposta 159504 de teste e 159461 normal)
 const propostas = {
   301: { id: 301, numero: 159504, total: 1000, totalProdutos: 1000, situacao: 'Pendente', contato: { id: 3, nome: 'Cliente Teste' },
-         observacaoInterna: 'Anotação do vendedor', transporte: { fretePorConta: 0, frete: 0, contato: { id: 0 } },
+         observacaoInterna: 'Anotação do vendedor', observacoes: 'Validade da proposta: 10 dias', transporte: { fretePorConta: 0, frete: 0, contato: { id: 0 } },
          itens: [{ produto: { id: 501 }, quantidade: 10, valor: 100 }] },
   302: { id: 302, numero: 159461, total: 500, totalProdutos: 500, situacao: 'Pendente', contato: { id: 4, nome: 'Outro' }, itens: [{ produto: { id: 501 }, quantidade: 5, valor: 100 }] },
 };
@@ -76,9 +81,10 @@ const c1 = await salvar(301);
 r = await api('/api/bling/proposta/previa', 'POST', { cotacao_id: c1 });
 t('prévia: valores', r.status === 200 && r.j.valor_custo === 162.05 && r.j.valor_enviado === 179.07 && r.j.proposta.numero === '159504' && !r.j.bloqueio);
 t('prévia: antes e depois', r.j.antes.observacaoInterna === 'Anotação do vendedor' && r.j.depois.observacaoInterna.includes('Nº da cotação (online): 777') && r.j.depois.transportadorId === 9988);
+t('prévia: observações compactas', r.j.depois.observacoes === 'Validade da proposta: 10 dias\n777/16205.5');
 t('prévia não grava', puts.length === 0);
 r = await api('/api/bling/proposta/enviar', 'POST', { cotacao_id: c1 });
-t('envio ok e conferido', r.status === 200 && r.j.ok && r.j.conferencia.observacao && r.j.conferencia.frete && r.j.conferencia.transportador && r.j.conferencia.itens);
+t('envio ok e conferido', r.status === 200 && r.j.ok && r.j.conferencia.observacao && r.j.conferencia.observacoes && r.j.conferencia.frete && r.j.conferencia.transportador && r.j.conferencia.itens);
 const pb = puts[0].b;
 t('PUT mantém o resto da proposta', pb.itens.length === 1 && pb.contato.id === 3 && pb.totalProdutos === 1000 && pb.transporte.fretePorConta === 0);
 t('PUT: frete com acréscimo, transportador e observação', pb.transporte.frete === 179.07 && pb.transporte.contato.id === 9988 && pb.observacaoInterna.startsWith('Anotação do vendedor\n\n--- Frete cotado') && pb.observacaoInterna.includes('Valor do frete (custo): R$ 162,05'));
@@ -86,7 +92,7 @@ t('registro do envio', psql(`SELECT ok||'/'||valor_enviado||'/'||usuario FROM bl
 // segundo envio: troca o bloco, não duplica
 psql(`UPDATE transportadoras_cadastro SET acrescimo_pct = 0;`);
 r = await api('/api/bling/proposta/enviar', 'POST', { cotacao_id: c1 });
-t('reenvio troca o bloco (sem duplicar)', r.j.ok && (propostas[301].observacaoInterna.match(/Frete cotado/g) || []).length === 1 && propostas[301].transporte.frete === 162.05);
+t('reenvio troca o bloco (sem duplicar)', r.j.ok && (propostas[301].observacaoInterna.match(/Frete cotado/g) || []).length === 1 && propostas[301].observacoes === 'Validade da proposta: 10 dias\n777/16205.5' && propostas[301].transporte.frete === 162.05);
 
 // transportador não aplicado pelo Bling → avisa na conferência
 ignorarTransportador = true; propostas[301].transporte.contato = { id: 0 };

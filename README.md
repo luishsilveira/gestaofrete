@@ -129,9 +129,10 @@ Quando a transportadora informa um valor diferente do calculado (site, e-mail, t
 - **Prévia:** lê a proposta atual no Bling e mostra antes × depois (valor do frete, transportador, observação interna). Só grava ao confirmar.
 - **O que muda na proposta:**
   - `observacaoInterna`: bloco entre `--- Frete cotado (Gestão de Frete) ---` e `--- fim do frete cotado ---` com transportadora, nº da cotação (quando online), valor do frete (custo real) e prazo. O texto que já existia é mantido; num novo envio só o bloco é trocado.
+  - `observacoes` (sai na proposta impressa): linha compacta `cotação/valor.prazo`, ex.: `23569/18715.4` = cotação online 23569, custo R$ 187,15 (só os dígitos, sem acréscimo), prazo 4 dias. Sem nº de cotação: `/18715.4`. O resto do campo é mantido; num novo envio a linha enviada antes (guardada em `bling_envios.obs_cliente`) é trocada.
   - `transporte.frete`: valor da transportadora escolhida + acréscimo % do cadastro de transportadoras.
   - transportador (`transporte.contato`): contato do Bling informado no cadastro, quando houver.
-- **Como grava:** a API (PUT `/propostas-comerciais/{id}`) exige a proposta inteira; a aplicação lê a atual, troca só esses campos e devolve o resto. Depois lê de novo e confere campo a campo (observação, frete, transportador, quantidade de itens); a tela mostra o resultado.
+- **Como grava:** a API (PUT `/propostas-comerciais/{id}`) exige a proposta inteira; a aplicação lê a atual, troca só esses campos e devolve o resto. Depois lê de novo e confere campo a campo (observações, observação interna, frete, transportador, quantidade de itens); a tela mostra o resultado.
 - **Registro:** tabela `bling_envios` (usuário, data, valores, transportador, texto, ok/erro, conferência), inclusive envios recusados.
 - **Liga/desliga:** Transportadoras → Cadastro de transportadoras → "Envio de cotações para o Bling": desligado, **modo de teste** (só a proposta de teste; padrão, proposta 159504) ou ligado.
 - **Cadastro de transportadoras** (tabela `transportadoras_cadastro`, chave = nome da transportadora como aparece na cotação): acréscimo % no frete da proposta e código do contato transportador no Bling (botão "Buscar no Bling" pesquisa em `/contatos`). Alteração com a permissão de configurações.
