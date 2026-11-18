@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS cotacao_valores_manuais (
 );
 CREATE INDEX IF NOT EXISTS cvm_cotacao_idx ON cotacao_valores_manuais (cotacao_id);
 ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS bling_nota_id BIGINT;
+CREATE INDEX IF NOT EXISTS cotacoes_bling_nota_idx ON cotacoes (bling_nota_id, criado_em DESC);
+CREATE INDEX IF NOT EXISTS cotacoes_bling_proposta_idx ON cotacoes (bling_proposta_id, criado_em DESC);
 `;
 export const MOTIVOS = ['Não identificado', 'Tabela desatualizada / reajuste', 'Taxa não prevista (TDE, TDA, agendamento…)',
   'Praça ou cidade diferente', 'ICMS', 'Peso ou cubagem diferente', 'Valor da NF diferente', 'Desconto ou negociação', 'Outro'];
@@ -71,6 +73,40 @@ const json = (dados, status = 200) =>
 
 const texto = (v, max = 200) => (v == null || v === '' ? null : String(v).slice(0, max));
 const numero = (v) => (v == null || v === '' || isNaN(+v) ? null : +v);
+
+// Vínculo cotação × documento do Bling. Vale a cotação feita pelo próprio documento e, entre pedido e NF,
+// também a do documento ligado (a NF do pedido ou o pedido da NF), mesmo que a NF tenha sido emitida depois.
+// `id` é uma expressão SQL (coluna ou parâmetro); a cotação usa o apelido `c`.
+const COT_DO_DOC = {
+  pedido: (id) => `(c.bling_pedido_id = ${id} OR (c.bling_nota_id IS NOT NULL AND c.bling_nota_id = (SELECT pv.nota_fiscal_id FROM pedidos_bling pv WHERE pv.id = ${id})))`,
+  proposta: (id) => `c.bling_proposta_id = ${id}`,
+  nota: (id) => `(c.bling_nota_id = ${id} OR c.bling_pedido_id IN (SELECT pv.id FROM pedidos_bling pv WHERE pv.nota_fiscal_id = ${id}))`,
+};
+// Última cotação ligada ao documento e quantas existem (para as listas do Bling).
+const ULTIMA_COT = (tipo, id) => `SELECT c.*, COUNT(*) OVER () AS n_cotacoes FROM cotacoes c WHERE ${COT_DO_DOC[tipo](id)} ORDER BY c.criado_em DESC LIMIT 1`;
+// Todas as cotações ligadas a um documento, da mais recente para a mais antiga.
+export async function cotacoesDoDocumento(db, tipo, id) {
+  if (!COT_DO_DOC[tipo] || !(+id > 0)) return [];
+  const r = await db.query(
+    `SELECT c.id, c.criado_em, c.usuario, c.melhor_transportadora, c.melhor_valor, c.melhor_prazo,
+            c.transportadora_escolhida, c.valor_escolhido,
+            CASE WHEN c.bling_${tipo}_id = $1 THEN 'direto'
+                 WHEN $2 = 'nota' THEN 'pedido' ELSE 'nota' END AS via
+       FROM cotacoes c WHERE ${COT_DO_DOC[tipo]('$1')}
+      ORDER BY c.criado_em DESC LIMIT 50`, [+id, tipo]);
+  return r.rows;
+}
+// Documentos do Bling ligados a uma cotação (com o número de cada um), inclusive o pedido da NF e a NF do pedido.
+const DOCS_DA_COT = `
+  SELECT json_agg(d ORDER BY d.ordem) FROM (
+    SELECT 1 AS ordem, 'pedido' AS tipo, pd.id, pd.numero::text AS numero, 'direto' AS via FROM pedidos_bling pd WHERE pd.id = c.bling_pedido_id
+    UNION ALL SELECT 2, 'proposta', pr.id, pr.numero::text, 'direto' FROM propostas_bling pr WHERE pr.id = c.bling_proposta_id
+    UNION ALL SELECT 3, 'nota', nf.id, nf.numero::text, 'direto' FROM notas_bling nf WHERE nf.id = c.bling_nota_id
+    UNION ALL SELECT 4, 'nota', nf.id, nf.numero::text, 'pedido' FROM pedidos_bling pd JOIN notas_bling nf ON nf.id = pd.nota_fiscal_id
+               WHERE pd.id = c.bling_pedido_id AND nf.id IS DISTINCT FROM c.bling_nota_id
+    UNION ALL SELECT 5, 'pedido', pd.id, pd.numero::text, 'nota' FROM pedidos_bling pd
+               WHERE c.bling_nota_id IS NOT NULL AND pd.nota_fiscal_id = c.bling_nota_id AND pd.id IS DISTINCT FROM c.bling_pedido_id
+  ) d`;
 
 async function comBanco(env, ctx, fn) {
   const client = new Client({ connectionString: env.HYPERDRIVE.connectionString });
@@ -253,21 +289,24 @@ async function listarCotacoes(url, env, ctx) {
   const params = [limite], cond = [];
   if (busca) {
     params.push(`%${busca}%`);
-    cond.push(`(cidade ILIKE $2 OR cliente ILIKE $2 OR pedido ILIKE $2 OR usuario ILIKE $2
-              OR melhor_transportadora ILIKE $2 OR cep ILIKE $2)`);
+    // também pelo número do pedido, da proposta ou da NF ligados no Bling
+    cond.push(`(c.cidade ILIKE $2 OR c.cliente ILIKE $2 OR c.pedido ILIKE $2 OR c.usuario ILIKE $2
+              OR c.melhor_transportadora ILIKE $2 OR c.cep ILIKE $2
+              OR EXISTS (SELECT 1 FROM json_array_elements(COALESCE((${DOCS_DA_COT}), '[]'::json)) e WHERE e->>'numero' ILIKE $2))`);
   }
-  if (url.searchParams.get('manual') === '1') cond.push('EXISTS (SELECT 1 FROM cotacao_valores_manuais m WHERE m.cotacao_id = cotacoes.id)');
+  if (url.searchParams.get('manual') === '1') cond.push('EXISTS (SELECT 1 FROM cotacao_valores_manuais m WHERE m.cotacao_id = c.id)');
   const filtro = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
   const r = await comBanco(env, ctx, (db) =>
     db.query(
-      `SELECT id, criado_em, usuario, cliente, pedido, cep, cidade, uf, peso_real, peso_taxado,
-              valor_nf, volumes, com_icms, melhor_transportadora, melhor_valor, melhor_prazo,
-              transportadora_escolhida, valor_escolhido, bling_pedido_id,
+      `SELECT c.id, c.criado_em, c.usuario, c.cliente, c.pedido, c.cep, c.cidade, c.uf, c.peso_real, c.peso_taxado,
+              c.valor_nf, c.volumes, c.com_icms, c.melhor_transportadora, c.melhor_valor, c.melhor_prazo,
+              c.transportadora_escolhida, c.valor_escolhido, c.bling_pedido_id, c.bling_proposta_id, c.bling_nota_id,
+              (${DOCS_DA_COT}) AS documentos,
               (SELECT json_agg(json_build_object('transportadora', m.transportadora, 'valor_manual', m.valor_manual,
                         'valor_calculado', m.valor_calculado) ORDER BY m.id)
-                 FROM cotacao_valores_manuais m WHERE m.cotacao_id = cotacoes.id) AS manuais
-         FROM cotacoes ${filtro}
-        ORDER BY criado_em DESC
+                 FROM cotacao_valores_manuais m WHERE m.cotacao_id = c.id) AS manuais
+         FROM cotacoes c ${filtro}
+        ORDER BY c.criado_em DESC
         LIMIT $1`,
       params,
     ),
@@ -347,7 +386,8 @@ async function blingPedido(url, env, ctx, usuario) {
     // produtos dos itens que ainda não foram importados (para o peso pelos itens)
     try { await completarProdutos(db, token, (n.itens || []).map((i) => i.produto_id)); } catch { /* peso pelos itens é opcional */ }
     const w = (await db.query(PESO_DOC(tabela, '$1'), [n.id])).rows[0] || {};
-    return { ...n, tipo, pesoItens: +w.peso_calculado || null, itensSemPeso: +w.itens_sem_peso || 0 };
+    return { ...n, tipo, pesoItens: +w.peso_calculado || null, itensSemPeso: +w.itens_sem_peso || 0,
+      cotacoes: await cotacoesDoDocumento(db, tipo, n.id) };
   });
   return json(doc);
 }
@@ -377,10 +417,10 @@ async function blingPedidos(url, env, ctx) {
             p.importado_em, p.importado_por, p.atualizado_em, p.canal, p.numero_loja, p.custo_frete_marketplace, p.nota_fiscal_id,
             pw.peso_calculado, pw.itens_sem_peso, pw.n_itens,
             c.id AS cotacao_id, c.criado_em AS cotado_em, c.melhor_transportadora, c.melhor_valor, c.melhor_prazo,
-            c.transportadora_escolhida, c.valor_escolhido, c.usuario AS cotado_por
+            c.transportadora_escolhida, c.valor_escolhido, c.usuario AS cotado_por, c.n_cotacoes
        FROM pedidos_bling p
        LEFT JOIN bling_situacoes s ON s.id = p.situacao_id
-       LEFT JOIN LATERAL (SELECT * FROM cotacoes WHERE bling_pedido_id = p.id ORDER BY criado_em DESC LIMIT 1) c ON true
+       LEFT JOIN LATERAL (${ULTIMA_COT('pedido', 'p.id')}) c ON true
        LEFT JOIN LATERAL (${PESO_DOC('pedido_itens', 'p.id')}) pw ON true
       ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}
       ORDER BY p.data DESC NULLS LAST, p.id DESC
@@ -411,9 +451,10 @@ async function blingPropostas(url, env, ctx) {
   const r = await comBanco(env, ctx, (db) => db.query(
     `SELECT p.id, p.numero, p.data, p.situacao, p.cliente, p.documento, p.cep, p.cidade, p.uf, p.origem_cep,
             p.valor_produtos, p.valor_total, p.frete, p.atualizado_em, pw.peso_calculado, pw.itens_sem_peso, pw.n_itens,
-            c.id AS cotacao_id, c.melhor_transportadora, c.melhor_valor, c.transportadora_escolhida, c.valor_escolhido
+            c.id AS cotacao_id, c.criado_em AS cotado_em, c.melhor_transportadora, c.melhor_valor, c.transportadora_escolhida, c.valor_escolhido,
+            c.usuario AS cotado_por, c.n_cotacoes
        FROM propostas_bling p
-       LEFT JOIN LATERAL (SELECT * FROM cotacoes WHERE bling_proposta_id = p.id ORDER BY criado_em DESC LIMIT 1) c ON true
+       LEFT JOIN LATERAL (${ULTIMA_COT('proposta', 'p.id')}) c ON true
        LEFT JOIN LATERAL (${PESO_DOC('proposta_itens', 'p.id')}) pw ON true
       ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}
       ORDER BY p.data DESC NULLS LAST, p.id DESC LIMIT $1`, params));
@@ -424,12 +465,16 @@ async function blingNotas(url, env, ctx) {
   const { params, cond, filtro } = parametrosLista(url, ['n.numero', 'n.cliente', 'n.cidade', 'n.cep', 'n.documento', 'n.transportadora', 'n.chave']);
   if (filtro === 'sem_pedido') cond.push('pd.id IS NULL');
   if (filtro === 'autorizadas') cond.push('n.situacao IN (5, 6, 7)');
+  if (filtro === 'sem_cotacao') cond.push('c.id IS NULL');
   const r = await comBanco(env, ctx, (db) => db.query(
     `SELECT n.id, n.numero, n.serie, n.data_emissao, n.situacao, n.chave, n.cliente, n.documento, n.cep, n.cidade, n.uf,
             n.valor_nota, n.valor_frete, n.frete_por_conta, n.transportadora, n.volumes, n.peso_bruto, n.peso_liquido,
-            pd.id AS pedido_id, pd.numero AS pedido_numero, pd.canal, pw.peso_calculado, pw.itens_sem_peso, pw.n_itens
+            pd.id AS pedido_id, pd.numero AS pedido_numero, pd.canal, pw.peso_calculado, pw.itens_sem_peso, pw.n_itens,
+            c.id AS cotacao_id, c.criado_em AS cotado_em, c.melhor_transportadora, c.melhor_valor, c.transportadora_escolhida,
+            c.valor_escolhido, c.usuario AS cotado_por, c.n_cotacoes
        FROM notas_bling n
-       LEFT JOIN pedidos_bling pd ON pd.nota_fiscal_id = n.id
+       LEFT JOIN LATERAL (SELECT * FROM pedidos_bling pv WHERE pv.nota_fiscal_id = n.id ORDER BY pv.id DESC LIMIT 1) pd ON true
+       LEFT JOIN LATERAL (${ULTIMA_COT('nota', 'n.id')}) c ON true
        LEFT JOIN LATERAL (${PESO_DOC('nota_itens', 'n.id')}) pw ON true
       ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}
       ORDER BY n.data_emissao DESC NULLS LAST, n.id DESC LIMIT $1`, params));
@@ -473,12 +518,13 @@ async function blingItens(url, env, ctx) {
           WHERE e.produto_id = ANY($1::bigint[]) ORDER BY e.produto_id, c.nome`, [pids])).rows : [];
       return itens.rows.map((i) => ({ ...i, componentes: comp.filter((c) => String(c.produto_id) === String(i.pid)) }));
     }));
-  return json({ itens: r });
+  const cotacoes = tipo === 'produto' ? [] : await comBanco(env, ctx, (db) => cotacoesDoDocumento(db, tipo, id));
+  return json({ itens: r, cotacoes });
 }
 
 async function obterCotacao(id, env, ctx) {
   const [r, m] = await comBanco(env, ctx, (db) => Promise.all([
-    db.query('SELECT * FROM cotacoes WHERE id = $1', [id]),
+    db.query(`SELECT c.*, (${DOCS_DA_COT}) AS documentos FROM cotacoes c WHERE c.id = $1`, [id]),
     db.query('SELECT * FROM cotacao_valores_manuais WHERE cotacao_id = $1 ORDER BY id', [id])]));
   if (!r.rows.length) return json({ erro: 'Cotação não encontrada.' }, 404);
   return json({ ...r.rows[0], valores_manuais: m.rows, motivos: MOTIVOS });

@@ -264,3 +264,10 @@ label.perm input:disabled+span{color:var(--mut)}
 .r.sem .pos{background:#e9edf2;color:var(--mut)}
 .r.sem .val,.r.sem .prz{color:var(--mut)}
 .gira-mini{display:inline-block;width:10px;height:10px;border:2px solid #cfd8e3;border-top-color:var(--azul);border-radius:50%;animation:gira .8s linear infinite;vertical-align:-1px}
+/* Vínculo da cotação com o documento do Bling */
+.vinculo{margin:8px 0 2px;padding:8px 10px;border-radius:8px;background:#eef5dc;color:#3d4d0f}
+.cot-doc-box{margin-top:8px;padding:8px 10px;border:1px solid #dde4ec;border-radius:8px;background:#f7f9fb;font-size:12.5px}
+table.cot-doc{margin-top:6px}
+table.cot-doc td,table.cot-doc th{padding:3px 8px}
+.cot-doc-box ul{margin:6px 0 0;padding-left:18px}
+.cot-doc-box li{margin:2px 0}

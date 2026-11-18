@@ -173,6 +173,34 @@ r = await api('/api/bling/pedido?numero=12345');
 t('busca por nº acha NF de saída', r.status === 200 && r.j.tipo === 'nota' && +r.j.pesoBruto === 52.5 && +r.j.valorProdutos === 1000 && r.j.transportadora === 'Trânsito Brasil');
 r = await api('/api/cotacoes', 'POST', { resultados: [{ transportadora: 'Bento', total: 1 }], bling_nota_id: 9001 });
 t('cotação ligada à NF', r.status === 201 && q(`SELECT bling_nota_id FROM cotacoes WHERE id=${r.j.id};`) === '9001');
+const idNf = r.j.id;
+
+// ---------- vínculo cotação × documento: pedido e NF ligados enxergam as cotações um do outro
+psql(`UPDATE pedidos_bling SET nota_fiscal_id = 9001 WHERE id = 101;`);
+const numPed = q(`SELECT numero FROM pedidos_bling WHERE id=101;`);
+r = await api('/api/cotacoes', 'POST', { resultados: [{ transportadora: 'Rodonaves', total: 210 }], bling_pedido_id: 101, pedido: numPed });
+const idPed = r.j.id;
+r = await api('/api/bling/notas');
+let nf = r.j.notas.find((x) => +x.id === 9001);
+t('NF mostra a última cotação (do pedido) e o total de 2', nf && +nf.cotacao_id === idPed && +nf.n_cotacoes === 2);
+r = await api('/api/bling/pedidos');
+let pd = r.j.pedidos.find((x) => +x.id === 101);
+t('pedido mostra 2 cotações (a dele e a da NF)', pd && +pd.cotacao_id === idPed && +pd.n_cotacoes === 2);
+t('pedido sem cotação continua sem', r.j.pedidos.filter((x) => +x.id !== 101).every((x) => !x.cotacao_id));
+r = await api('/api/bling/notas?filtro=sem_cotacao');
+t('filtro NF sem cotação', !r.j.notas.some((x) => +x.id === 9001));
+r = await api('/api/bling/itens?tipo=nota&id=9001');
+t('detalhe da NF lista as cotações e a origem', r.j.cotacoes.length === 2 && r.j.cotacoes.find((c) => +c.id === idPed).via === 'pedido' && r.j.cotacoes.find((c) => +c.id === idNf).via === 'direto');
+r = await api('/api/bling/itens?tipo=pedido&id=101');
+t('detalhe do pedido lista as cotações e a origem', r.j.cotacoes.length === 2 && r.j.cotacoes.find((c) => +c.id === idNf).via === 'nota');
+r = await api(`/api/cotacoes/${idPed}`);
+t('cotação mostra pedido e NF do pedido', r.j.documentos.length === 2 && r.j.documentos[0].tipo === 'pedido' && r.j.documentos[1].tipo === 'nota' && r.j.documentos[1].via === 'pedido' && r.j.documentos[1].numero === '12345');
+r = await api(`/api/cotacoes/${idNf}`);
+t('cotação da NF mostra o pedido da NF', r.j.documentos.some((d) => d.tipo === 'pedido' && d.via === 'nota' && d.numero === numPed));
+r = await api('/api/cotacoes?busca=12345');
+t('histórico busca pelo nº da NF ligada', [idPed, idNf].every((id) => r.j.cotacoes.some((c) => +c.id === id)) && r.j.cotacoes.find((c) => +c.id === idPed).documentos.length === 2);
+r = await api('/api/bling/pedido?numero=12345');
+t('busca na calculadora devolve as cotações do documento', r.status === 200 && r.j.cotacoes.length === 2);
 
 // ---------- valores manuais e divergências
 r = await api('/api/cotacoes', 'POST', { uf: 'AL', cidade: 'Pão de Açúcar', peso_real: 120, valor_nf: 2000,

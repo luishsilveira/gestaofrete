@@ -123,6 +123,11 @@ Quando a transportadora informa um valor diferente do calculado (site, e-mail, t
 
 1. **Busca:** o usuário digita o nº do pedido. O servidor busca no Bling (API v3) o CEP de entrega (etiqueta de transporte; se faltar, o endereço do cliente), o peso bruto, a quantidade de volumes, o valor dos produtos e o nome do cliente, e preenche a calculadora.
 2. **Volta para o Bling:** por enquanto é manual. O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
+   - **Vínculo cotação × documento:** a cotação salva depois de buscar um pedido, proposta ou NF fica ligada a esse documento (`bling_pedido_id`, `bling_proposta_id` ou `bling_nota_id`). Entre pedido e NF o vínculo vale para os dois lados (pela `nota_fiscal_id` do pedido), mesmo se a NF for emitida depois da cotação.
+   - **Na calculadora:** ao buscar o documento aparecem as cotações já vinculadas a ele; o painel "Salvar cotação" mostra a que documento a cotação vai ficar ligada (link "Não vincular"). Se o nº do pedido do painel for trocado, a cotação não é vinculada.
+   - **Nas telas do Bling:** Pedidos, Propostas e Notas fiscais mostram a última cotação vinculada, o nº dela (com "+N" quando há mais de uma) e um link para o Histórico; o detalhe do documento lista todas as cotações vinculadas. Notas fiscais ganharam o botão "Cotar" e o filtro "Sem cotação".
+   - **No Histórico:** a lista e o detalhe mostram os documentos ligados (pedido, proposta, NF, inclusive a NF do pedido e o pedido da NF); a busca acha a cotação pelo nº de qualquer um deles.
+   - API: `GET /api/bling/pedido` e `GET /api/bling/itens` devolvem `cotacoes`; `GET /api/cotacoes` e `GET /api/cotacoes/{id}` devolvem `documentos`. Teste: `npm run test:sync`.
 3. **Configuração:**
    - Secrets `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` no Cloudflare (Workers & Pages → gestaofrete → Settings → Variables and secrets).
    - Link de redirecionamento do aplicativo no Bling: `https://<domínio>/api/bling/callback`.

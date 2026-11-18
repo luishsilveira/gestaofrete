@@ -772,9 +772,10 @@ $('s_btn').onclick=async()=>{
   const esc_=ULT.res[+$('s_transp').value||0];
   corpo.transportadora_escolhida=esc_.t.transportadora; corpo.valor_escolhido=+esc_.total.toFixed(2);
   corpo.valores_manuais=MAN_PEND;
-  if(BLING_PED&&corpo.pedido===BLING_PED.numero) corpo[{proposta:'bling_proposta_id',nota:'bling_nota_id'}[BLING_PED.tipo]||'bling_pedido_id']=BLING_PED.id;
+  const vinc=docVinculado(); if(vinc) corpo[{proposta:'bling_proposta_id',nota:'bling_nota_id'}[vinc.tipo]||'bling_pedido_id']=vinc.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
-    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`; SALVA={id:j.id,chave:chaveCalc()}; MAN_GRAV=MAN_PEND.map(m=>({...m})); MAN_PEND=[]; desenharListaPend();
+    $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${vinc?` e vinculada ${aoDoc(vinc.tipo)} `+docNome(vinc.tipo,vinc.numero):''}${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`;
+    if(vinc){ vinc.cotacoes=[{id:j.id,criado_em:j.criado_em,usuario:'você',transportadora_escolhida:corpo.transportadora_escolhida,valor_escolhido:corpo.valor_escolhido,via:'direto'},...(vinc.cotacoes||[])]; mostrarCotacoesDoc(); } SALVA={id:j.id,chave:chaveCalc()}; MAN_GRAV=MAN_PEND.map(m=>({...m})); MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
 };
@@ -878,7 +879,7 @@ async function buscarPedidoBling(){
 }
 function preencherPedido(p){
     $('b_num').value=p.numero;
-    BLING_PED={tipo:p.tipo||'pedido',id:p.id,numero:String(p.numero)}; $('s_transp').dataset.escolhida='';
+    BLING_PED={tipo:p.tipo||'pedido',id:p.id,numero:String(p.numero),cotacoes:p.cotacoes||null}; $('s_transp').dataset.escolhida='';
     const avisos=[];
     if(p.pesoBruto>0) $('peso').value=p.pesoBruto; else avisos.push('sem peso no Bling (nem no documento nem nos produtos): informe o peso');
     if(p.origemPeso==='itens') avisos.push('peso calculado pelos itens (peso dos produtos e componentes dos kits)');
@@ -887,6 +888,7 @@ function preencherPedido(p){
     const nf=p.valorProdutos||p.valorTotal; if(nf>0) $('nf').value=nf; else avisos.push('valor do pedido zerado: informe o valor da NF');
     if(p.volumes>0) $('qv').value=p.volumes;
     $('s_cliente').value=p.cliente||''; $('s_pedido').value=p.numero; $('doc_dest').value=p.documento||'';
+    mostrarCotacoesDoc(); if(!p.cotacoes) carregarCotacoesDoc();
     $('b_status').innerHTML=`<b>${{proposta:'Proposta',nota:'Nota fiscal'}[p.tipo]||'Pedido'} ${esc(p.numero)}</b>${p.tipo==='nota'&&p.transportadora?' · transportadora da NF: '+esc(p.transportadora):''}${p.canal&&p.canal!=='Venda direta'?' · '+canalTag(p.canal):''}${p.cliente?' · '+esc(p.cliente):''}<br>`+
       `Peso ${p.pesoBruto>0?p.pesoBruto.toLocaleString('pt-BR')+' kg':'—'} · ${p.volumes>0?p.volumes+' volume(s) · ':''}NF ${nf>0?brl(nf):'—'}`+
       `${p.freteAtual>0?' · frete já lançado no Bling: '+brl(p.freteAtual):''}`+
@@ -894,6 +896,55 @@ function preencherPedido(p){
       (avisos.length?`<br><span class="aviso">Atenção: ${avisos.join('; ')}.</span>`:'');
     if(p.cep){ $('cep').value=fmtCep(+p.cep); $('cep').dispatchEvent(new Event('input')); }
     else { $('b_status').innerHTML+='<br><span class="aviso">O pedido não tem CEP de entrega: informe o CEP.</span>'; calc(); }
+}
+
+// ---------- Vínculo da cotação com o documento do Bling ----------
+// A cotação salva fica ligada ao pedido, proposta ou NF buscado; entre pedido e NF o vínculo vale para os dois.
+const docNome=(tipo,numero)=>`${{proposta:'proposta',nota:'NF'}[tipo]||'pedido'} ${numero}`;
+const aoDoc=tipo=>tipo==='nota'?'à':'ao';
+const docRotulo=(tipo,numero)=>`${{proposta:'Proposta',nota:'NF'}[tipo]||'Pedido'} ${esc(numero)}`;
+// Documento a que a próxima cotação salva ficará ligada (enquanto o nº no painel Salvar for o do documento buscado).
+const docVinculado=()=>BLING_PED&&$('s_pedido').value.trim()===BLING_PED.numero?BLING_PED:null;
+function atualizarVinculo(){
+  const v=docVinculado(), el=$('s_vinculo'); el.classList.toggle('hide',!BLING_PED);
+  if(!BLING_PED) return;
+  el.innerHTML=v?`🔗 Ao salvar, a cotação fica vinculada ${aoDoc(v.tipo)} <b>${docRotulo(v.tipo,v.numero)}</b> do Bling. <a href="#" id="s_desvincular">Não vincular</a>`
+    :`<span class="aviso">O nº do pedido foi alterado: a cotação não será vinculada ${aoDoc(BLING_PED.tipo)} ${docRotulo(BLING_PED.tipo,BLING_PED.numero)}.</span> <a href="#" id="s_revincular">Vincular de novo</a>`;
+  const d=$('s_desvincular'); if(d) d.onclick=e=>{ e.preventDefault(); BLING_PED=null; $('b_cots').innerHTML=''; atualizarVinculo(); };
+  const r=$('s_revincular'); if(r) r.onclick=e=>{ e.preventDefault(); $('s_pedido').value=BLING_PED.numero; atualizarVinculo(); };
+}
+$('s_pedido').addEventListener('input',atualizarVinculo);
+// Lista de cotações de um documento (calculadora, detalhe do documento nas telas do Bling).
+function htmlCotacoesDoc(L,tipo){
+  if(!L||!L.length) return '';
+  const via={pedido:'feita pelo pedido desta NF',nota:'feita pela NF deste pedido'};
+  return `<table class="mini cot-doc"><tr><th>Cotação</th><th>Data</th><th>Usuário</th><th>Transportadora</th><th class="n">Valor</th><th></th></tr>`+
+    L.map(c=>`<tr><td><a href="#" data-cot="${c.id}">nº ${c.id}</a></td><td>${horaBR(c.criado_em)}</td><td class="small">${esc(c.usuario||'')}</td>
+      <td>${esc(c.transportadora_escolhida||c.melhor_transportadora||'')}</td><td class="n">${brl(+(c.valor_escolhido??c.melhor_valor)||0)}</td>
+      <td class="small">${c.via&&c.via!=='direto'?via[c.via]||'':''}</td></tr>`).join('')+'</table>';
+}
+function mostrarCotacoesDoc(){
+  const el=$('b_cots'); atualizarVinculo();
+  if(!BLING_PED||!BLING_PED.cotacoes){ el.innerHTML=''; return; }
+  const L=BLING_PED.cotacoes, nome=docRotulo(BLING_PED.tipo,BLING_PED.numero);
+  const via={pedido:' (pelo pedido)',nota:' (pela NF)'};
+  const lista=L.slice(0,5).map(c=>`<li><a href="#" data-cot="${c.id}">nº ${c.id}</a> · ${horaBR(c.criado_em)} · ${esc(c.transportadora_escolhida||c.melhor_transportadora||'')} <b>${brl(+(c.valor_escolhido??c.melhor_valor)||0)}</b> <span class="small">${esc(c.usuario||'')}${via[c.via]||''}</span></li>`).join('');
+  el.innerHTML=L.length?`<div class="cot-doc-box"><b>${L.length===1?'1 cotação já vinculada':L.length+' cotações já vinculadas'} a este documento (${nome})</b><ul>${lista}</ul>${L.length>5?`<a href="#" data-cotdoc="1" class="small">ver todas no Histórico</a>`:''}</div>`
+    :`<div class="small">Nenhuma cotação vinculada a este documento ainda.</div>`;
+  ligarLinksCotacao(el,BLING_PED.numero);
+}
+async function carregarCotacoesDoc(){
+  const d=BLING_PED; if(!d||!API_OK||!pode('menu.bling')) return;
+  try{ const j=await api(`/api/bling/itens?tipo=${d.tipo}&id=${d.id}`); if(BLING_PED===d){ d.cotacoes=j.cotacoes||[]; mostrarCotacoesDoc(); } }catch(e){}
+}
+// Links "nº X" de cotação: abre o Histórico filtrado pelo documento, com o detalhe da cotação.
+function ligarLinksCotacao(el,numeroDoc){
+  el.querySelectorAll('a[data-cot],a[data-cotdoc]').forEach(a=>a.onclick=e=>{ e.preventDefault(); e.stopPropagation(); abrirCotacao(a.dataset.cot,numeroDoc); });
+}
+async function abrirCotacao(id,numeroDoc){
+  if(!pode('menu.hist')){ alert('Seu perfil não tem acesso ao Histórico de cotações.'); return; }
+  $('h_busca').value=numeroDoc||''; $('h_manual').checked=false;
+  irPara('hist'); if(id) await detalheHistorico(id);
 }
 
 // ---------- Dados importados do Bling (pedidos, propostas, notas, produtos) ----------
@@ -904,7 +955,7 @@ const NOME_REC={pedidos:'Pedidos',propostas:'Propostas',notas:'Notas fiscais',pr
 const FILTROS={
   pedidos:[['','Todos'],['sem_cotacao','Sem cotação'],['sem_frete','Sem frete lançado no Bling'],['acima','Frete no Bling acima da cotação']],
   propostas:[['','Todas'],['sem_cotacao','Sem cotação']],
-  notas:[['','Todas'],['autorizadas','Autorizadas'],['sem_pedido','Sem pedido ligado']],
+  notas:[['','Todas'],['autorizadas','Autorizadas'],['sem_pedido','Sem pedido ligado'],['sem_cotacao','Sem cotação']],
   produtos:[['','Todos'],['kits','Só kits (com estrutura)'],['sem_peso','Sem peso cadastrado']]};
 const BUSCA={pedidos:'Buscar por nº, nº da loja, cliente, cidade, CEP ou CPF/CNPJ',propostas:'Buscar por nº, cliente, cidade ou CEP',
   notas:'Buscar por nº, cliente, cidade, CEP, transportadora ou chave',produtos:'Buscar por código ou nome'};
@@ -947,12 +998,14 @@ async function carregarBling(){
     LISTA=j[r]; const n=LISTA.length;
     $('p_status').innerHTML=`${n} registro(s)${n===300?' (mostrando os 300 mais recentes)':''}. Clique numa linha para ver os itens. ${textoSync()}`;
     $('p_tab').innerHTML=n?RENDER[r].cab+LISTA.map((x,i)=>`<tr class="lin" data-i="${i}">${RENDER[r].lin(x,i)}</tr>`).join(''):'';
-    $('p_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=e=>{ if(e.target.closest('button')) return; detalheItens(r,LISTA[+tr.dataset.i],tr); });
+    $('p_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=e=>{ if(e.target.closest('button,a')) return; detalheItens(r,LISTA[+tr.dataset.i],tr); });
+    $('p_tab').querySelectorAll('tr.lin').forEach(tr=>ligarLinksCotacao(tr,LISTA[+tr.dataset.i].numero));
     $('p_tab').querySelectorAll('button[data-cotar]').forEach(b=>b.onclick=()=>cotarDoc(r,LISTA[+b.dataset.cotar]));
   }catch(e){ $('p_status').innerHTML='<span class="err">Erro ao carregar: '+esc(e.message)+'</span>'; $('p_tab').innerHTML=''; }
 }
 const cotCel=x=>{ const cot=x.cotacao_id?(+(x.valor_escolhido??x.melhor_valor)):null;
-  return cot!=null?brl(cot)+`<br><span class="small">${esc(x.transportadora_escolhida||x.melhor_transportadora||'')}</span>`:'<span class="small">sem cotação</span>'; };
+  return cot!=null?brl(cot)+`<br><span class="small">${esc(x.transportadora_escolhida||x.melhor_transportadora||'')}</span>`+
+    `<br><a href="#" class="small" data-cot="${x.cotacao_id}" title="Abrir no Histórico">nº ${x.cotacao_id}${+x.n_cotacoes>1?` (+${+x.n_cotacoes-1})`:''}</a>`:'<span class="small">sem cotação</span>'; };
 const destCel=x=>x.cidade?esc(x.cidade)+'/'+esc(x.uf):'<span class="aviso">sem CEP</span>';
 const RENDER={
   pedidos:{cab:'<tr><th>Nº</th><th>Data</th><th>Canal</th><th>Situação</th><th>Cliente</th><th>Destino</th><th class="n">Peso no pedido</th><th class="n">Peso pelos itens</th><th class="n">Valor</th><th class="n">Frete no Bling</th><th class="n">Cotação</th><th class="n">Diferença</th><th></th></tr>',
@@ -967,11 +1020,12 @@ const RENDER={
     lin:(p,i)=>`<td>${esc(p.numero)}</td><td>${dataBR(p.data)}</td><td class="small">${esc(p.situacao||'—')}</td><td>${esc(p.cliente||'')}</td><td>${destCel(p)}</td>
       <td class="n">${pesoDoc(p)}</td><td class="n">${brl(+(p.valor_produtos||p.valor_total||0))}</td><td class="n">${+p.frete>0?brl(+p.frete):'—'}</td>
       <td class="n">${cotCel(p)}</td><td><button class="btn btn-mini" data-cotar="${i}">Cotar</button></td>`},
-  notas:{cab:'<tr><th>NF</th><th>Emissão</th><th>Pedido</th><th>Cliente</th><th>Destino</th><th>Transportadora</th><th class="n">Volumes</th><th class="n">Peso na NF</th><th class="n">Peso pelos itens</th><th class="n">Valor da NF</th><th class="n">Frete na NF</th></tr>',
-    lin:n=>`<td>${esc(n.numero)}${n.serie?`<span class="small">/${esc(n.serie)}</span>`:''}</td><td>${dataBR(n.data_emissao)}</td>
+  notas:{cab:'<tr><th>NF</th><th>Emissão</th><th>Pedido</th><th>Cliente</th><th>Destino</th><th>Transportadora</th><th class="n">Volumes</th><th class="n">Peso na NF</th><th class="n">Peso pelos itens</th><th class="n">Valor da NF</th><th class="n">Frete na NF</th><th class="n">Cotação</th><th></th></tr>',
+    lin:(n,i)=>`<td>${esc(n.numero)}${n.serie?`<span class="small">/${esc(n.serie)}</span>`:''}</td><td>${dataBR(n.data_emissao)}</td>
       <td>${n.pedido_numero?esc(n.pedido_numero)+'<br>'+canalTag(n.canal):'<span class="small">—</span>'}</td><td>${esc(n.cliente||'')}</td><td>${destCel(n)}</td>
       <td class="small">${esc(n.transportadora||'—')}</td><td class="n">${n.volumes||'—'}</td><td class="n">${kg(n.peso_bruto)}</td><td class="n">${pesoDoc(n)}</td>
-      <td class="n">${brl(+n.valor_nota||0)}</td><td class="n">${+n.valor_frete>0?brl(+n.valor_frete):'—'}</td>`},
+      <td class="n">${brl(+n.valor_nota||0)}</td><td class="n">${+n.valor_frete>0?brl(+n.valor_frete):'—'}</td>
+      <td class="n">${cotCel(n)}</td><td><button class="btn btn-mini" data-cotar="${i}">Cotar</button></td>`},
   produtos:{cab:'<tr><th>Código</th><th>Produto</th><th>Tipo</th><th class="n">Preço</th><th class="n">Peso bruto (cadastro)</th><th class="n">Peso usado</th><th class="n">Componentes</th></tr>',
     lin:p=>`<td>${esc(p.codigo||'')}</td><td>${esc(p.nome||'')}${p.situacao==='I'?' <span class="small">(inativo)</span>':''}</td>
       <td class="small">${+p.n_componentes>0?'Kit':p.formato==='V'?'Com variações':'Simples'}</td><td class="n">${p.preco!=null?brl(+p.preco):'—'}</td>
@@ -995,16 +1049,19 @@ async function detalheItens(tipoLista,x,tr){
         <td class="n">${pu>0?kg(pu):'<span class="aviso">sem peso</span>'}</td><td class="n">${pt>0?kg(pt):'—'}</td><td class="n">${i.valor_total!=null?brl(+i.valor_total):brl((+i.valor||0)*(+i.quantidade||0))}</td></tr>`+comp; }).join('');
     $('p_det').innerHTML=`<div class="card"><h2>${titulo}</h2>
       ${j.itens.length?`<table><tr><th>Código</th><th>Descrição</th><th class="n">Qtd.</th><th class="n">Valor unit.</th><th class="n">Peso unit.</th><th class="n">Peso total</th><th class="n">Valor total</th></tr>${linhas}
-      ${tipo!=='produto'?`<tr><td></td><td><b>Total</b></td><td></td><td></td><td></td><td class="n"><b>${kg(tot)}</b></td><td></td></tr>`:''}</table>`:'<p class="small">Sem itens importados.</p>'}</div>`;
+      ${tipo!=='produto'?`<tr><td></td><td><b>Total</b></td><td></td><td></td><td></td><td class="n"><b>${kg(tot)}</b></td><td></td></tr>`:''}</table>`:'<p class="small">Sem itens importados.</p>'}
+      ${tipo!=='produto'?`<h3>Cotações vinculadas</h3>${htmlCotacoesDoc(j.cotacoes,tipo)||'<p class="small">Nenhuma cotação vinculada a este documento.</p>'}`:''}</div>`;
+    ligarLinksCotacao($('p_det'),x.numero);
     $('p_det').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(e){ $('p_det').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 function cotarDoc(r,p){
   irPara('calc',false);
   const pesoPedido=+p.peso_bruto||0, pesoItens=+p.peso_calculado||0;
-  preencherPedido({tipo:r==='propostas'?'proposta':'pedido',id:p.id,numero:p.numero,cliente:p.cliente,documento:p.documento,cep:p.cep,origemCep:p.origem_cep,
+  preencherPedido({tipo:{propostas:'proposta',notas:'nota'}[r]||'pedido',id:p.id,numero:p.numero,cliente:p.cliente,documento:p.documento,cep:p.cep,origemCep:p.origem_cep,
     pesoBruto:pesoPedido||pesoItens||null,origemPeso:pesoPedido?'pedido':pesoItens?'itens':'',pesoItens:pesoItens||null,
-    volumes:+p.volumes||null,valorProdutos:+p.valor_produtos||null,valorTotal:+p.valor_total||null,freteAtual:+(p.frete_bling||p.frete)||null,canal:p.canal});
+    volumes:+p.volumes||null,valorProdutos:+(p.valor_produtos||p.valor_nota)||null,valorTotal:+p.valor_total||null,freteAtual:+(p.frete_bling||p.frete||p.valor_frete)||null,
+    canal:p.canal,transportadora:p.transportadora});
   window.scrollTo({top:0,behavior:'smooth'});
 }
 $('b_buscar').onclick=buscarPedidoBling;
@@ -1022,7 +1079,7 @@ async function carregarHistorico(){
     $('h_status').textContent=L.length?`${L.length} cotação(ões)${L.length===200?' (mostrando as 200 mais recentes)':''}. Clique numa linha para ver o detalhe.`:'Nenhuma cotação encontrada.';
     $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th><th class="n">Valor manual</th></tr>'+
       L.map(c=>`<tr class="lin" data-id="${c.id}"><td>${c.id}</td><td>${new Date(c.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</td><td class="small">${esc(c.usuario)}</td>
-        <td>${esc(c.cliente||'')}${c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
+        <td>${esc(c.cliente||'')}${(c.documentos||[]).length?`<br><span class="small">🔗 ${(c.documentos).map(d=>docRotulo(d.tipo,d.numero)).join(' · ')}</span>`:c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
         <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}${c.transportadora_escolhida&&c.transportadora_escolhida!==c.melhor_transportadora?`<br><span class="small">escolhida: ${esc(c.transportadora_escolhida)} (${brl(+c.valor_escolhido)})</span>`:''}</td>
         <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td>
         <td class="n small">${(c.manuais||[]).map(m=>`${esc(m.transportadora)}: ${brl(+m.valor_manual)}<br>${difTxt(+m.valor_manual,+m.valor_calculado)}`).join('<br>')||'—'}</td></tr>`).join(''):'';
@@ -1030,6 +1087,7 @@ async function carregarHistorico(){
   }catch(e){ $('h_status').textContent='Erro ao carregar o histórico: '+e.message; }
 }
 const confirmarRemocao=()=>confirm('Remover este valor manual?');
+const docsCot=L=>L.map(d=>`🔗 ${docRotulo(d.tipo,d.numero)}${d.via!=='direto'?` <span class="small">(${d.via==='pedido'?'NF do pedido':'pedido da NF'})</span>`:''}`).join('<br>');
 async function detalheHistorico(id){
   $('h_div').innerHTML='';
   if(!$('h_det').innerHTML) $('h_det').innerHTML='<div class="card small">Carregando…</div>';
@@ -1041,7 +1099,7 @@ async function detalheHistorico(id){
       <div>Carga</div><div>${(+c.peso_real).toLocaleString('pt-BR')} kg real · ${(+c.peso_taxado).toLocaleString('pt-BR')} kg taxado · NF ${brl(+c.valor_nf)}${c.volumes?' · '+c.volumes+' volume(s)':''}</div>
       <div>Regras</div><div>${c.com_icms?'com ICMS':'sem ICMS'} · tonelada: ${c.regra_tonelada==='tot'?'peso total':'excedente'}</div>
       ${c.transportadora_escolhida?`<div>Escolhida</div><div>${esc(c.transportadora_escolhida)} – ${brl(+c.valor_escolhido)}</div>`:''}
-      ${c.bling_pedido_id?`<div>Pedido no Bling</div><div>ID ${esc(c.bling_pedido_id)}</div>`:''}
+      ${(c.documentos||[]).length?`<div>Documentos no Bling</div><div>${docsCot(c.documentos)}</div>`:''}
       ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
       <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
       ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>

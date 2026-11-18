@@ -56,6 +56,7 @@
 <h2>Pedido, proposta ou NF do Bling</h2>
 <div class="bling-busca"><input id="b_num" placeholder="Nº do pedido, proposta ou NF" inputmode="numeric"><button class="btn" id="b_buscar">Buscar</button></div>
 <div class="small" id="b_status"></div>
+<div id="b_cots"></div>
 <a class="btn btn2 hide" data-perm="acao.bling_sincronizar" id="b_conectar" href="/api/bling/conectar">Conectar ao Bling</a>
 <hr>
 </div>
@@ -107,6 +108,7 @@
 <div><label>Cliente (opcional)</label><input id="s_cliente" maxlength="120" placeholder="Nome do cliente"></div>
 <div><label>Nº do pedido (opcional)</label><input id="s_pedido" maxlength="40" placeholder="Ex.: 12345"></div>
 </div>
+<div class="vinculo small hide" id="s_vinculo"></div>
 <label>Observação (opcional)</label><input id="s_obs" maxlength="500">
 <label>Transportadora escolhida</label><select id="s_transp"></select>
 <div class="manual" data-perm="acao.valor_manual"><div class="manual-tit">Valor cotado manualmente <span class="small">(opcional – use quando a transportadora informar um valor diferente do calculado)</span></div>
