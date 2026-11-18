@@ -119,10 +119,12 @@ Quando a transportadora informa um valor diferente do calculado (site, e-mail, t
 - **Tabela:** `cotacao_valores_manuais` (cotacao_id, transportadora, valor_calculado, valor_manual, prazo_manual, referencia, motivo, observacao, usuario, criado_em).
 - **API:** `POST /api/cotacoes` aceita `valores_manuais: [...]`; `POST /api/cotacoes/{id}/manual`; `PATCH|DELETE /api/manuais/{id}`; `GET /api/cotacoes?manual=1`; `GET /api/divergencias?de=&ate=&transportadora=`.
 
-## Integração com o Bling (etapa 1: busca do pedido)
+## Integração com o Bling (somente leitura)
+
+**Decisão (18/11/2026):** a aplicação só lê dados do Bling. Nenhuma cotação, frete ou transportadora é gravado de volta no Bling pela API; o vínculo entre cotação e documento existe apenas no banco da aplicação. A única chamada que não é consulta é a renovação do token OAuth.
 
 1. **Busca:** o usuário digita o nº do pedido. O servidor busca no Bling (API v3) o CEP de entrega (etiqueta de transporte; se faltar, o endereço do cliente), o peso bruto, a quantidade de volumes, o valor dos produtos e o nome do cliente, e preenche a calculadora.
-2. **Volta para o Bling:** por enquanto é manual. O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
+2. **Volta para o Bling:** é sempre manual (não há gravação pela API). O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
    - **Vínculo cotação × documento:** a cotação salva depois de buscar um pedido, proposta ou NF fica ligada a esse documento (`bling_pedido_id`, `bling_proposta_id` ou `bling_nota_id`). Entre pedido e NF o vínculo vale para os dois lados (pela `nota_fiscal_id` do pedido), mesmo se a NF for emitida depois da cotação.
    - **Na calculadora:** ao buscar o documento aparecem as cotações já vinculadas a ele; o painel "Salvar cotação" mostra a que documento a cotação vai ficar ligada (link "Não vincular"). Se o nº do pedido do painel for trocado, a cotação não é vinculada.
    - **Nas telas do Bling:** Pedidos, Propostas e Notas fiscais mostram a última cotação vinculada, o nº dela (com "+N" quando há mais de uma) e um link para o Histórico; o detalhe do documento lista todas as cotações vinculadas. Notas fiscais ganharam o botão "Cotar" e o filtro "Sem cotação".
