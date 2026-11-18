@@ -258,7 +258,7 @@ function calc(){
   if(simples){
     let h=res.map((x,k)=>{ const prazo=x.rv.prazo||x.r.prazo;
       return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?(x.t.tabelaDesatualizada?' <span class="aviso">tabela desatualizada · aguarde a cotação online…</span>':' consultando online…'):(x.t.tabelaDesatualizada?' <span class="aviso">online indisponível · tabela desatualizada, confira o valor</span>':' online indisponível')):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b>${x.rv.fonte==='api'?`<span><span class="badge b-api">online</span> valor oficial da transportadora${numCotOnline(x)}${x.it[1]&&Math.abs(x.it[1].v)>0.01?` · a tabela dá ${brl(Math.abs(x.it[1].v))} ${x.it[1].v>0?'a menos':'a mais'}`:''}</span>`:`<span><span class="badge b-tab">tabela</span>${x.on?(x.on.erro==='consulta online em andamento'?(x.t.tabelaDesatualizada?' <span class="aviso">tabela desatualizada · aguarde a cotação online…</span>':' consultando online…'):(x.t.tabelaDesatualizada?' <span class="aviso">online indisponível · tabela desatualizada, confira o valor</span>':' online indisponível')):''}${x.rv.fonte==='man'?` · praça ${x.r.regiao} a confirmar`:''}</span>`}</div>
       <div class="prz">${prazo?fp(prazo):'não informado'}<small>prazo</small></div>
       <div class="val">${brl(x.total)}<small>${k?'+'+brl(x.total-res[0].total):'menor preço'}</small></div></div></div>`;}).join('');
     h+=cardsSem;
@@ -270,7 +270,7 @@ function calc(){
     const bcls={lista:'b-lista',cap:'b-cap',man:'b-man',api:'b-api'}[x.rv.fonte];
     const bpNota=x.on&&x.on.fonte==='tabela'?` · <span class="aviso">${x.on.erro==='consulta online em andamento'?'consultando online…':'cotação online indisponível: '+esc(x.on.erro)}</span>`:'';
     return `<div class="r ${k?'':'best'}"><div class="rh"><div class="pos">${k+1}</div>
-      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}${bpNota}</span></div>
+      <div class="nm"><b>${x.t.transportadora} ${k?'':'<span class="tag">Melhor opção</span>'}</b><span>${x.r.regiao}<span class="badge ${bcls}">${x.rv.txt}</span>${prazo?' · prazo '+fp(prazo):''}${x.rv.freq?' · saídas '+x.rv.freq:''}${x.rv.fonte==='api'?numCotOnline(x):''}${bpNota}</span></div>
       <div class="val">${brl(x.total)}${dif}</div></div>
       <div class="det">${x.rv.op&&x.rv.op.length>1?`<label>Praça usada no cálculo</label><select data-t="${x.t.id}">${x.rv.op.map(o=>`<option value="${o.i}" ${o.i==x.rv.i?'selected':''}>${o.r.regiao}</option>`).join('')}</select>`:''}
       ${x.pT!==pt?`<div class="small" style="margin:8px 0">Peso taxado nesta transportadora: <b>${x.pT.toLocaleString('pt-BR')} kg</b> (isenta de cubagem até ${x.t.isentoCubM3.toLocaleString('pt-BR')} m³)</div>`:''}
@@ -295,6 +295,11 @@ function calc(){
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','doc_dest'].forEach(id=>$(id).addEventListener('input',calc));
 
+// Nº da cotação devolvido pela API da transportadora (para conferir ou fechar o frete com ela), com botão de copiar.
+const numCotOnline=x=>x.on&&x.on.id?` · cotação nº <b class="mono">${esc(x.on.id)}</b> <a href="#" class="small" data-copiar="${esc(x.on.id)}" title="Copiar o nº da cotação">copiar</a>`:'';
+document.addEventListener('click',async e=>{ const a=e.target.closest('a[data-copiar]'); if(!a) return; e.preventDefault(); e.stopPropagation();
+  try{ await navigator.clipboard.writeText(a.dataset.copiar); a.textContent='copiado ✓'; }catch(_){ a.textContent='selecione e copie'; }
+  setTimeout(()=>{ a.textContent='copiar'; },2000); });
 // ---------- Cotação online nas transportadoras (API) ----------
 // Cada transportadora com API é consultada numa chamada própria, em paralelo: a tela acompanha uma a uma.
 // ONL.atual = { chave, resultados: {id: resultado}, pend: Set(ids em andamento), ini, fim, remetente, destinatarioGenerico }
@@ -1101,8 +1106,8 @@ async function detalheHistorico(id){
       ${c.transportadora_escolhida?`<div>Escolhida</div><div>${esc(c.transportadora_escolhida)} – ${brl(+c.valor_escolhido)}</div>`:''}
       ${(c.documentos||[]).length?`<div>Documentos no Bling</div><div>${docsCot(c.documentos)}</div>`:''}
       ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
-      <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th class="n">Total</th></tr>
-      ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>
+      <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th>Origem do valor</th><th class="n">Total</th></tr>
+      ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="small">${r.fonte_valor==='online'?`<span class="badge b-api">online</span>${r.cotacao_online?` cotação nº <b class="mono">${esc(r.cotacao_online)}</b> <a href="#" data-copiar="${esc(r.cotacao_online)}">copiar</a>`:' <span class="aviso">sem nº informado</span>'}`:r.fonte_valor==='tabela'?`<span class="badge b-tab">tabela</span>${r.erro_online?' online indisponível':''}`:'tabela'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>
       ${nc.length?`<p class="small">Sem cotação: ${nc.map(n=>esc(n.transportadora)).join(', ')}</p>`:''}
       <div class="manual"><div class="manual-tit">Valores cotados manualmente</div><div id="hm_lista">${tabelaManuais(c.valores_manuais||[],pode('acao.valor_manual'))||'<p class="small">Nenhum valor manual registrado.</p>'}</div><div id="hm_form"></div></div></div>`;
     if(c.motivos) MOTIVOS=c.motivos;
