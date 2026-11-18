@@ -18,8 +18,9 @@ export const PERMISSOES = [
   { chave: 'acao.salvar_cotacao', ajuda: 'Gravar a cotação no histórico', grupo: 'Ações', nome: 'Salvar cotações' },
   { chave: 'acao.valor_manual', ajuda: 'Informar o valor cotado direto com a transportadora', grupo: 'Ações', nome: 'Registrar e remover valores manuais' },
   { chave: 'acao.bling_sincronizar', ajuda: 'Importar agora e refazer a conexão com o Bling', grupo: 'Ações', nome: 'Sincronizar e reconectar o Bling' },
+  { chave: 'acao.bling_proposta', ajuda: 'Gravar transportadora, frete e observação interna na proposta comercial do Bling', grupo: 'Ações', nome: 'Enviar cotação para a proposta no Bling' },
   { chave: 'acao.integracoes', ajuda: 'Usar cotação online e testar conexão', grupo: 'Ações', nome: 'Ligar, desligar e testar integrações' },
-  { chave: 'acao.configuracoes', ajuda: 'Salvar empresa remetente e itens com valor fixo', grupo: 'Ações', nome: 'Alterar empresa remetente e itens com valor fixo' },
+  { chave: 'acao.configuracoes', ajuda: 'Salvar empresa remetente, itens com valor fixo, cadastro de transportadoras e envio para o Bling', grupo: 'Ações', nome: 'Alterar configurações (remetente, valores fixos, transportadoras, envio ao Bling)' },
   { chave: 'admin.usuarios', ajuda: 'Tela Usuários e perfis (incluir, bloquear, alterar acessos)', grupo: 'Administração', nome: 'Cadastrar usuários e perfis de acesso' },
 ];
 const CHAVES = new Set(PERMISSOES.map((p) => p.chave));
@@ -104,6 +105,10 @@ const REGRAS = [
   [/^\/api\/divergencias$/, 'menu.div'],
   [/^\/api\/bling\/(sincronizar|conectar|callback)$/, 'acao.bling_sincronizar'],
   [/^\/api\/bling\/status$/, null],
+  [/^\/api\/bling\/envio-config$/, { GET: null, POST: 'acao.configuracoes' }],
+  [/^\/api\/bling\/proposta\//, 'acao.bling_proposta'],
+  [/^\/api\/transportadoras\/cadastro$/, { GET: 'menu.tab', POST: ['menu.tab', 'acao.configuracoes'] }],
+  [/^\/api\/transportadoras\/contatos-bling$/, 'acao.configuracoes'],
   [/^\/api\/bling\/pedido$/, 'menu.calc'],
   [/^\/api\/bling\//, 'menu.bling'],
   [/^\/api\/online\/cotar$/, 'menu.calc'],

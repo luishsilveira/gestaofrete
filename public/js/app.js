@@ -358,12 +358,12 @@ async function iniciarOnline(){
 
 // ---------- Navegação (menu lateral) ----------
 const TITULOS={calc:'Calcular frete','bling-pedidos':'Bling · Pedidos','bling-propostas':'Bling · Propostas','bling-notas':'Bling · Notas fiscais','bling-produtos':'Bling · Produtos',
-  hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',acesso:'Usuários e perfis',tab:'Tabelas de frete',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
-const SECOES=['calc','tab','ped','hist','div','integ','cfg','json','mkt','acesso'];
+  hist:'Histórico de cotações',div:'Divergências',mkt:'Resultado no marketplace',acesso:'Usuários e perfis',tab:'Tabelas de frete',transp:'Cadastro de transportadoras',integ:'Integrações (APIs)',cfg:'Empresa remetente',json:'Modelo de dados'};
+const SECOES=['calc','tab','transp','ped','hist','div','integ','cfg','json','mkt','acesso'];
 // ---------- Permissões do perfil do usuário (null = sem servidor: tudo liberado) ----------
 let PERM=null;
 const pode=k=>!PERM||PERM.includes(k);
-const PERM_PAGINA={calc:'menu.calc',tab:'menu.tab',hist:'menu.hist',div:'menu.div',integ:'menu.integ',cfg:'menu.cfg',json:'menu.json',mkt:'menu.mkt',acesso:'admin.usuarios'};
+const PERM_PAGINA={calc:'menu.calc',tab:'menu.tab',transp:'menu.tab',hist:'menu.hist',div:'menu.div',integ:'menu.integ',cfg:'menu.cfg',json:'menu.json',mkt:'menu.mkt',acesso:'admin.usuarios'};
 const podePagina=p=>pode(p.startsWith('bling-')?'menu.bling':PERM_PAGINA[p]);
 const primeiraPagina=()=>{ const a=[...document.querySelectorAll('#menu nav a')].find(a=>!a.classList.contains('hide')&&!a.classList.contains('semperm')); return a?a.dataset.p:'calc'; };
 function aplicarPermissoes(){ document.querySelectorAll('[data-perm]').forEach(e=>e.classList.toggle('semperm',!e.dataset.perm.split(' ').some(pode))); }
@@ -377,7 +377,7 @@ function irPara(p,carregar=true){
   if(('#'+p)!==location.hash) history.replaceState(null,'','#'+p);
   if(!carregar) return;
   if(sec==='ped') mudarRecurso(p.slice(6)); else if(p==='hist') carregarHistorico(); else if(p==='div') analiseDivergencias();
-  else if(p==='integ'){ carregarIntegracoes(); carregarCredenciais(); } else if(p==='mkt') carregarMkt(); else if(p==='acesso') carregarAcesso(); else if(p==='cfg') carregarConfig();
+  else if(p==='transp') carregarCadastroTransp(); else if(p==='integ'){ carregarIntegracoes(); carregarCredenciais(); } else if(p==='mkt') carregarMkt(); else if(p==='acesso') carregarAcesso(); else if(p==='cfg') carregarConfig();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('#menu a').forEach(a=>a.onclick=e=>{ e.preventDefault(); irPara(a.dataset.p); });
@@ -780,6 +780,7 @@ $('s_btn').onclick=async()=>{
   const vinc=docVinculado(); if(vinc) corpo[{proposta:'bling_proposta_id',nota:'bling_nota_id'}[vinc.tipo]||'bling_pedido_id']=vinc.id;
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
     $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${vinc?` e vinculada ${aoDoc(vinc.tipo)} `+docNome(vinc.tipo,vinc.numero):''}${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`;
+    if(vinc&&vinc.tipo==='proposta') $('s_status').innerHTML=esc($('s_status').textContent)+botaoEnvioBling(j.id);
     if(vinc){ vinc.cotacoes=[{id:j.id,criado_em:j.criado_em,usuario:'você',transportadora_escolhida:corpo.transportadora_escolhida,valor_escolhido:corpo.valor_escolhido,via:'direto'},...(vinc.cotacoes||[])]; mostrarCotacoesDoc(); } SALVA={id:j.id,chave:chaveCalc()}; MAN_GRAV=MAN_PEND.map(m=>({...m})); MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
@@ -901,6 +902,99 @@ function preencherPedido(p){
       (avisos.length?`<br><span class="aviso">Atenção: ${avisos.join('; ')}.</span>`:'');
     if(p.cep){ $('cep').value=fmtCep(+p.cep); $('cep').dispatchEvent(new Event('input')); }
     else { $('b_status').innerHTML+='<br><span class="aviso">O pedido não tem CEP de entrega: informe o CEP.</span>'; calc(); }
+}
+
+// ---------- Cadastro de transportadoras (acréscimo e transportador no Bling) ----------
+let CAD_TR=[];
+async function carregarCadastroTransp(){
+  $('tr_status').textContent='Carregando…';
+  try{
+    const [c,s,ev]=await Promise.all([api('/api/transportadoras/cadastro'),api('/api/online/status').catch(()=>({integracoes:[]})),api('/api/bling/envio-config').catch(()=>null)]);
+    const nomes=new Set(TABELAS.map(t=>t.transportadora));
+    (s.integracoes||[]).forEach(i=>{ if(i.transportadora&&!TABELAS.some(t=>t.id===i.tabela)) nomes.add(i.transportadora); });
+    c.cadastro.forEach(x=>nomes.add(x.nome));
+    CAD_TR=[...nomes].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(n=>{ const x=c.cadastro.find(y=>y.nome===n)||{};
+      return {nome:n,acrescimo_pct:x.acrescimo_pct!=null?+x.acrescimo_pct:0,bling_contato_id:x.bling_contato_id||'',bling_contato_nome:x.bling_contato_nome||'',atualizado_por:x.atualizado_por,atualizado_em:x.atualizado_em}; });
+    desenharCadastroTransp();
+    $('tr_status').textContent='';
+    if(ev){ $('ev_modo').value=ev.modo; $('ev_teste').value=ev.numero_teste||''; }
+  }catch(e){ $('tr_status').innerHTML='<span class="err">'+esc(e.message)+'</span>'; }
+}
+function desenharCadastroTransp(){
+  const ed=pode('acao.configuracoes'), dis=ed?'':'disabled';
+  $('tr_tab').innerHTML='<tr><th>Transportadora</th><th class="n">Acréscimo no frete da proposta (%)</th><th>Transportador no Bling (código)</th><th>Nome no Bling</th><th></th></tr>'+
+    CAD_TR.map((x,i)=>`<tr><td><b>${esc(x.nome)}</b>${x.atualizado_por?`<br><span class="small">alterado por ${esc(x.atualizado_por)} em ${horaBR(x.atualizado_em)}</span>`:''}</td>
+      <td class="n"><input data-tr="${i}" data-k="acrescimo_pct" value="${String(x.acrescimo_pct).replace('.',',')}" inputmode="decimal" style="width:90px;text-align:right" ${dis}></td>
+      <td><input data-tr="${i}" data-k="bling_contato_id" value="${esc(x.bling_contato_id)}" inputmode="numeric" style="width:140px" placeholder="—" ${dis}></td>
+      <td class="small" id="tr_nome_${i}">${esc(x.bling_contato_nome||'')}</td>
+      <td>${ed?`<button class="btn btn-mini btn2" data-trbusca="${i}">Buscar no Bling</button>`:''}</td></tr>`).join('');
+  $('tr_tab').querySelectorAll('input[data-tr]').forEach(inp=>inp.oninput=()=>{ const x=CAD_TR[+inp.dataset.tr]; x[inp.dataset.k]=inp.value;
+    if(inp.dataset.k==='bling_contato_id'){ x.bling_contato_nome=''; $('tr_nome_'+inp.dataset.tr).textContent=''; } });
+  $('tr_tab').querySelectorAll('button[data-trbusca]').forEach(b=>b.onclick=()=>buscarContatoBling(+b.dataset.trbusca));
+}
+function buscarContatoBling(i){
+  const x=CAD_TR[i], termo=x.nome.replace(/\(.*?\)/g,'').replace(/transportes?|e logística|expresso/gi,'').trim();
+  abrirModal(`<div class="modal-cab"><h2>Transportador no Bling · ${esc(x.nome)}</h2><button class="x" data-fechar aria-label="Fechar">×</button></div><div class="modal-corpo"><p class="small">Busque pelo nome, CNPJ ou código do contato cadastrado no Bling.</p>
+    <div class="bling-busca"><input id="cb_q" value="${esc(termo)}"><button class="btn" id="cb_ir">Buscar</button></div><div id="cb_res" class="small" style="margin-top:10px"></div>
+    <div class="salvar-acao" style="margin-top:14px"><button class="btn btn2" id="cb_fechar">Fechar</button></div></div>`);
+  $('cb_fechar').onclick=fecharModal;
+  const ir=async()=>{ $('cb_res').textContent='Buscando no Bling…';
+    try{ const j=await api('/api/transportadoras/contatos-bling?q='+encodeURIComponent($('cb_q').value.trim()));
+      $('cb_res').innerHTML=j.contatos.length?`<table class="mini"><tr><th>Código</th><th>Nome</th><th>CPF/CNPJ</th><th></th></tr>${j.contatos.map((c,k)=>`<tr><td>${c.id}</td><td>${esc(c.nome)}</td><td>${esc(c.documento||'')}</td><td><button class="btn btn-mini" data-cb="${k}">Usar</button></td></tr>`).join('')}</table>`:'Nenhum contato encontrado.';
+      $('cb_res').querySelectorAll('button[data-cb]').forEach(b=>b.onclick=()=>{ const c=j.contatos[+b.dataset.cb];
+        x.bling_contato_id=String(c.id); x.bling_contato_nome=c.nome; fecharModal(); desenharCadastroTransp();
+        $('tr_status').innerHTML='<span class="aviso">Clique em "Salvar cadastro" para gravar.</span>'; });
+    }catch(e){ $('cb_res').innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
+  $('cb_ir').onclick=ir; $('cb_q').addEventListener('keydown',e=>{ if(e.key==='Enter') ir(); }); ir();
+}
+$('tr_salvar').onclick=async()=>{
+  const b=$('tr_salvar'); b.disabled=true; $('tr_status').className='small'; $('tr_status').textContent='Salvando…';
+  try{ await api('/api/transportadoras/cadastro',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cadastro:CAD_TR})});
+    await carregarCadastroTransp(); $('tr_status').className='small ok'; $('tr_status').textContent='Cadastro salvo.'; }
+  catch(e){ $('tr_status').className='small err'; $('tr_status').textContent=e.message; }
+  finally{ b.disabled=false; }
+};
+$('ev_salvar').onclick=async()=>{
+  $('ev_status').className='small'; $('ev_status').textContent='Salvando…';
+  try{ const c=await api('/api/bling/envio-config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({modo:$('ev_modo').value,numero_teste:$('ev_teste').value})});
+    $('ev_modo').value=c.modo; $('ev_teste').value=c.numero_teste; $('ev_status').className='small ok'; $('ev_status').textContent='Salvo.'; }
+  catch(e){ $('ev_status').className='small err'; $('ev_status').textContent=e.message; }
+};
+
+// ---------- Envio da cotação para a proposta comercial no Bling (com prévia) ----------
+const botaoEnvioBling=(cotId)=>pode('acao.bling_proposta')?` <button class="btn btn-mini" data-envbling="${cotId}">Enviar para a proposta no Bling</button>`:'';
+document.addEventListener('click',e=>{ const b=e.target.closest('button[data-envbling]'); if(!b) return; e.preventDefault(); previaEnvioBling(+b.dataset.envbling); });
+const linhaAntesDepois=(rot,a,d)=>`<tr><td><b>${rot}</b></td><td>${a}</td><td>${d}</td></tr>`;
+const preTxt=t=>t?`<pre class="obs-pre">${esc(t)}</pre>`:'<span class="small">(vazio)</span>';
+async function previaEnvioBling(cotId){
+  abrirModal('<div class="modal-cab"><h2>Enviar para a proposta no Bling</h2><button class="x" data-fechar aria-label="Fechar">×</button></div><div class="modal-corpo"><p class="small">Lendo a proposta no Bling…</p></div>');
+  try{ const p=await api('/api/bling/proposta/previa',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cotacao_id:cotId})});
+    const tr=p.transportador?`${esc(p.transportador.nome||'')} <span class="small">(código ${p.transportador.id})</span>`:'<span class="small">não alterado</span>';
+    abrirModal(`<div class="modal-cab"><h2>Enviar para a proposta nº ${esc(p.proposta.numero)} no Bling</h2><button class="x" data-fechar aria-label="Fechar">×</button></div><div class="modal-corpo">
+      <p class="small">${p.proposta.cliente?esc(p.proposta.cliente)+' · ':''}cotação nº ${cotId} · ${esc(p.transportadora)}</p>
+      ${p.bloqueio?`<div class="note">${esc(p.bloqueio)}</div>`:''}
+      ${p.avisos.map(a=>`<div class="note">${esc(a)}</div>`).join('')}
+      <table class="mini mt"><tr><th></th><th>Hoje no Bling</th><th>Depois do envio</th></tr>
+        ${linhaAntesDepois('Valor do frete',p.antes.frete!=null?brl(+p.antes.frete):'—',`<b>${brl(p.valor_enviado)}</b><br><span class="small">custo ${brl(p.valor_custo)} + ${String(p.acrescimo_pct).replace('.',',')}%</span>`)}
+        ${linhaAntesDepois('Transportador',p.antes.transportadorId?'código '+p.antes.transportadorId:'—',tr)}
+        ${linhaAntesDepois('Observação interna',preTxt(p.antes.observacaoInterna),preTxt(p.depois.observacaoInterna))}
+      </table>
+      ${p.envios.length?`<p class="small">Envios anteriores desta cotação: ${p.envios.map(x=>`${horaBR(x.criado_em)} por ${esc(x.usuario)} (${x.ok?'ok':'com problema'})`).join(' · ')}</p>`:''}
+      <div class="salvar-acao" style="margin-top:14px">${p.bloqueio?'':'<button class="btn" id="eb_ok">Confirmar e gravar no Bling</button>'}<button class="btn btn2" id="eb_fechar">${p.bloqueio?'Fechar':'Cancelar'}</button><span class="small" id="eb_status"></span></div></div>`);
+    $('eb_fechar').onclick=fecharModal;
+    if($('eb_ok')) $('eb_ok').onclick=async()=>{
+      $('eb_ok').disabled=true; $('eb_status').className='small'; $('eb_status').textContent='Gravando no Bling…';
+      try{ const r=await api('/api/bling/proposta/enviar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cotacao_id:cotId})});
+        const c=r.conferencia, m=v=>v===true?'✓ conferido':v===false?'<span class="err">✗ não ficou como enviado</span>':'—';
+        $('eb_status').innerHTML='';
+        $('eb_ok').remove();
+        $('modal').querySelector('.modal-corpo').insertAdjacentHTML('beforeend',`<div class="${r.ok?'vinculo':'note'}" style="margin-top:12px"><b>${r.ok?'Proposta atualizada no Bling.':'O Bling aceitou, mas confira a proposta:'}</b><br>
+          Observação interna: ${m(c.observacao)} · Valor do frete (${brl(r.valor_enviado)}): ${m(c.frete)} · Transportador: ${m(c.transportador)} · Itens: ${c.itens===false?'<span class="err">✗ mudaram</span>':'✓ mantidos'}
+          ${c.total_antes!=null?`<br>Total da proposta: ${brl(+c.total_antes)} → ${brl(+c.total_depois)}`:''}</div>`);
+        $('eb_fechar').textContent='Fechar';
+      }catch(e){ $('eb_ok').disabled=false; $('eb_status').className='small err'; $('eb_status').textContent=e.message; }
+    };
+  }catch(e){ abrirModal(`<div class="modal-cab"><h2>Enviar para a proposta no Bling</h2><button class="x" data-fechar aria-label="Fechar">×</button></div><div class="modal-corpo"><div class="note">${esc(e.message)}</div><div class="salvar-acao"><button class="btn btn2" id="eb_fechar">Fechar</button></div></div>`); $('eb_fechar').onclick=fecharModal; }
 }
 
 // ---------- Vínculo da cotação com o documento do Bling ----------
@@ -1104,7 +1198,7 @@ async function detalheHistorico(id){
       <div>Carga</div><div>${(+c.peso_real).toLocaleString('pt-BR')} kg real · ${(+c.peso_taxado).toLocaleString('pt-BR')} kg taxado · NF ${brl(+c.valor_nf)}${c.volumes?' · '+c.volumes+' volume(s)':''}</div>
       <div>Regras</div><div>${c.com_icms?'com ICMS':'sem ICMS'} · tonelada: ${c.regra_tonelada==='tot'?'peso total':'excedente'}</div>
       ${c.transportadora_escolhida?`<div>Escolhida</div><div>${esc(c.transportadora_escolhida)} – ${brl(+c.valor_escolhido)}</div>`:''}
-      ${(c.documentos||[]).length?`<div>Documentos no Bling</div><div>${docsCot(c.documentos)}</div>`:''}
+      ${(c.documentos||[]).length?`<div>Documentos no Bling</div><div>${docsCot(c.documentos)}${c.bling_proposta_id?botaoEnvioBling(c.id):''}</div>`:''}
       ${c.observacao?`<div>Observação</div><div>${esc(c.observacao)}</div>`:''}</div>
       <table><tr><th>#</th><th>Transportadora</th><th>Praça</th><th>Prazo</th><th>Origem do valor</th><th class="n">Total</th></tr>
       ${rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.transportadora)}</td><td class="small">${esc(r.praca)}</td><td>${r.prazo?fp(r.prazo):'—'}</td><td class="small">${r.fonte_valor==='online'?`<span class="badge b-api">online</span>${r.cotacao_online?` cotação nº <b class="mono">${esc(r.cotacao_online)}</b> <a href="#" data-copiar="${esc(r.cotacao_online)}">copiar</a>`:' <span class="aviso">sem nº informado</span>'}`:r.fonte_valor==='tabela'?`<span class="badge b-tab">tabela</span>${r.erro_online?' online indisponível':''}`:'tabela'}</td><td class="n">${brl(+r.total)}</td></tr>`).join('')}</table>

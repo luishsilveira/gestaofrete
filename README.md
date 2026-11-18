@@ -120,12 +120,26 @@ Quando a transportadora informa um valor diferente do calculado (site, e-mail, t
 - **Tabela:** `cotacao_valores_manuais` (cotacao_id, transportadora, valor_calculado, valor_manual, prazo_manual, referencia, motivo, observacao, usuario, criado_em).
 - **API:** `POST /api/cotacoes` aceita `valores_manuais: [...]`; `POST /api/cotacoes/{id}/manual`; `PATCH|DELETE /api/manuais/{id}`; `GET /api/cotacoes?manual=1`; `GET /api/divergencias?de=&ate=&transportadora=`.
 
-## Integração com o Bling (somente leitura)
+## Integração com o Bling (leitura; gravação só em propostas comerciais)
 
-**Decisão (18/11/2026):** a aplicação só lê dados do Bling. Nenhuma cotação, frete ou transportadora é gravado de volta no Bling pela API; o vínculo entre cotação e documento existe apenas no banco da aplicação. A única chamada que não é consulta é a renovação do token OAuth.
+**Decisões (18/11/2026):** pedidos de venda e notas fiscais são só de leitura: nada é gravado neles pela API. A única gravação é o **envio da cotação para a proposta comercial** (abaixo), sempre por um usuário, com prévia e confirmação. O vínculo entre cotação e documento existe no banco da aplicação.
+
+### Envio da cotação para a proposta comercial (`src/propostaBling.js`)
+- **Onde:** botão "Enviar para a proposta no Bling" depois de salvar uma cotação feita a partir de uma proposta, e no detalhe da cotação no Histórico. Permissão "Enviar cotação para a proposta no Bling" (`acao.bling_proposta`).
+- **Prévia:** lê a proposta atual no Bling e mostra antes × depois (valor do frete, transportador, observação interna). Só grava ao confirmar.
+- **O que muda na proposta:**
+  - `observacaoInterna`: bloco entre `--- Frete cotado (Gestão de Frete) ---` e `--- fim do frete cotado ---` com transportadora, nº da cotação (quando online), valor do frete (custo real) e prazo. O texto que já existia é mantido; num novo envio só o bloco é trocado.
+  - `transporte.frete`: valor da transportadora escolhida + acréscimo % do cadastro de transportadoras.
+  - transportador (`transporte.contato`): contato do Bling informado no cadastro, quando houver.
+- **Como grava:** a API (PUT `/propostas-comerciais/{id}`) exige a proposta inteira; a aplicação lê a atual, troca só esses campos e devolve o resto. Depois lê de novo e confere campo a campo (observação, frete, transportador, quantidade de itens); a tela mostra o resultado.
+- **Registro:** tabela `bling_envios` (usuário, data, valores, transportador, texto, ok/erro, conferência), inclusive envios recusados.
+- **Liga/desliga:** Transportadoras → Cadastro de transportadoras → "Envio de cotações para o Bling": desligado, **modo de teste** (só a proposta de teste; padrão, proposta 159504) ou ligado.
+- **Cadastro de transportadoras** (tabela `transportadoras_cadastro`, chave = nome da transportadora como aparece na cotação): acréscimo % no frete da proposta e código do contato transportador no Bling (botão "Buscar no Bling" pesquisa em `/contatos`). Alteração com a permissão de configurações.
+- **Escopo no Bling:** Propostas Comerciais com edição. Depois de mudar os escopos do aplicativo, "Reconectar ao Bling".
+- API: `GET|POST /api/transportadoras/cadastro` · `GET /api/transportadoras/contatos-bling?q=` · `GET|POST /api/bling/envio-config` · `POST /api/bling/proposta/previa` e `/enviar` (`{cotacao_id}`). Teste: `node tests/proposta.test.mjs`.
 
 1. **Busca:** o usuário digita o nº do pedido. O servidor busca no Bling (API v3) o CEP de entrega (etiqueta de transporte; se faltar, o endereço do cliente), o peso bruto, a quantidade de volumes, o valor dos produtos e o nome do cliente, e preenche a calculadora.
-2. **Volta para o Bling:** é sempre manual (não há gravação pela API). O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
+2. **Volta para o Bling:** em pedidos é manual (botão "Copiar valor do frete"); em propostas comerciais, pelo envio descrito acima. O botão "Copiar valor do frete" copia o valor da transportadora escolhida para colar no pedido. A cotação salva guarda o ID do pedido, a transportadora escolhida e o valor.
    - **Vínculo cotação × documento:** a cotação salva depois de buscar um pedido, proposta ou NF fica ligada a esse documento (`bling_pedido_id`, `bling_proposta_id` ou `bling_nota_id`). Entre pedido e NF o vínculo vale para os dois lados (pela `nota_fiscal_id` do pedido), mesmo se a NF for emitida depois da cotação.
    - **Na calculadora:** ao buscar o documento aparecem as cotações já vinculadas a ele; o painel "Salvar cotação" mostra a que documento a cotação vai ficar ligada (link "Não vincular"). Se o nº do pedido do painel for trocado, a cotação não é vinculada.
    - **Nas telas do Bling:** Pedidos, Propostas e Notas fiscais mostram a última cotação vinculada, o nº dela (com "+N" quando há mais de uma) e um link para o Histórico; o detalhe do documento lista todas as cotações vinculadas. Notas fiscais ganharam o botão "Cotar" e o filtro "Sem cotação".

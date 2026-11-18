@@ -10,6 +10,7 @@ import { SCHEMA_CREDENCIAIS, listarCredenciais, salvarCredencial, excluirCredenc
 import { SCHEMA_ACESSO, prepararAcesso, carregarUsuario, exigir, permissaoDaRota, registrarAcesso, listarAcesso, salvarUsuario, excluirUsuario, salvarPerfil, excluirPerfil, emailDaRequisicao, AcessoErro } from './acesso.js';
 import { analisarMarketplace, lerFixos, salvarFixos, sugestoesFixos } from './marketplace.js';
 import { SCHEMA_ONLINE, MIGRAR_ONLINE, cotarOnline, testarIntegracao, statusIntegracoes, ativarIntegracao, configuracao, salvarConfiguracao } from './online.js';
+import { SCHEMA_PROPOSTA, configEnvio, salvarConfigEnvio, listarCadastro, salvarCadastro, buscarContatosBling, previaEnvio, enviarProposta } from './propostaBling.js';
 import { SCHEMA_DOCS, buscarPedido, buscarProposta, buscarNota, completarProdutos, gravarPedidos, gravarPropostas, gravarNotas, sincronizarTudo } from './sync.js';
 
 const SCHEMA = `
@@ -121,6 +122,7 @@ async function comBanco(env, ctx, fn) {
       await client.query(MIGRAR_ONLINE);
       await client.query(SCHEMA_ACESSO);
       await client.query(SCHEMA_CREDENCIAIS);
+      await client.query(SCHEMA_PROPOSTA);
       await prepararAcesso(client);
       esquemaPronto = true;
     }
@@ -646,6 +648,27 @@ export default {
       if (url.pathname === '/api/config') {
         if (request.method === 'POST') { const d = await corpoJson(); await comBanco(env, ctx, (db) => salvarConfiguracao(db, d, usuario)); }
         return json(await comBanco(env, ctx, (db) => configuracao(env, db)));
+      }
+      // cadastro de transportadoras (acréscimo no frete da proposta e transportador no Bling)
+      if (url.pathname === '/api/transportadoras/cadastro') {
+        if (request.method === 'POST') { const d = await corpoJson(); return json({ cadastro: await comBanco(env, ctx, (db) => salvarCadastro(db, d.cadastro, usuario)) }); }
+        return json({ cadastro: await comBanco(env, ctx, (db) => listarCadastro(db)) });
+      }
+      if (url.pathname === '/api/transportadoras/contatos-bling') {
+        return json({ contatos: await comBanco(env, ctx, (db) => buscarContatosBling(env, db, url.searchParams.get('q'))) });
+      }
+      // envio da cotação para a proposta comercial no Bling (src/propostaBling.js)
+      if (url.pathname === '/api/bling/envio-config') {
+        if (request.method === 'POST') { const d = await corpoJson(); return json(await comBanco(env, ctx, (db) => salvarConfigEnvio(db, d, usuario))); }
+        return json(await comBanco(env, ctx, (db) => configEnvio(db)));
+      }
+      if (url.pathname === '/api/bling/proposta/previa' && request.method === 'POST') {
+        const d = await corpoJson();
+        return json(await comBanco(env, ctx, (db) => previaEnvio(env, db, +d.cotacao_id)));
+      }
+      if (url.pathname === '/api/bling/proposta/enviar' && request.method === 'POST') {
+        const d = await corpoJson();
+        return json(await comBanco(env, ctx, (db) => enviarProposta(env, db, +d.cotacao_id, usuario)));
       }
       if (url.pathname === '/api/motivos') return json({ motivos: MOTIVOS });
       return json({ erro: 'Rota não encontrada.' }, 404);

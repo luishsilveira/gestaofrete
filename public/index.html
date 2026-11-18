@@ -30,6 +30,7 @@
 <a href="#div" data-p="div" data-perm="menu.div"><i>△</i>Divergências</a>
 <div class="grupo" data-perm="menu.tab menu.integ">Transportadoras</div>
 <a href="#tab" data-p="tab" data-perm="menu.tab"><i>▦</i>Tabelas de frete</a>
+<a href="#transp" data-p="transp" data-perm="menu.tab"><i>⚑</i>Cadastro de transportadoras</a>
 <a href="#integ" data-p="integ" data-perm="menu.integ"><i>⇄</i>Integrações (APIs)</a>
 <div class="grupo" data-perm="menu.cfg menu.json admin.usuarios">Configurações</div>
 <a href="#cfg" data-p="cfg" data-perm="menu.cfg"><i>⚙</i>Empresa remetente</a>
@@ -125,6 +126,24 @@
 <label>Transportadora</label>
 <select id="tsel" style="max-width:360px"></select>
 <div id="tview" style="margin-top:16px"></div>
+</div>
+</section>
+
+<section id="transp" class="hide">
+<div class="card">
+<h2>Cadastro de transportadoras</h2>
+<p class="small">Usado ao enviar a cotação para a proposta comercial no Bling: o <b>acréscimo</b> é somado ao valor do frete gravado na proposta (a observação interna leva o custo real) e o <b>transportador no Bling</b> é o contato que fica como transportadora da proposta.</p>
+<div class="tbl-wrap" style="max-height:none"><table id="tr_tab"></table></div>
+<div class="salvar-acao" style="margin-top:12px"><button class="btn" id="tr_salvar" data-perm="acao.configuracoes">Salvar cadastro</button><span class="small" id="tr_status"></span></div>
+</div>
+<div class="card" style="max-width:640px">
+<h2>Envio de cotações para o Bling</h2>
+<p class="small">Só propostas comerciais recebem a cotação (observação interna, valor do frete e transportador). Pedidos e notas fiscais nunca são alterados.</p>
+<div class="row2">
+<div><label>Situação</label><select id="ev_modo"><option value="teste">Modo de teste: só a proposta de teste</option><option value="ligado">Ligado: todas as propostas</option><option value="desligado">Desligado</option></select></div>
+<div><label>Nº da proposta de teste</label><input id="ev_teste" inputmode="numeric" maxlength="12"></div>
+</div>
+<button class="btn" id="ev_salvar" data-perm="acao.configuracoes">Salvar</button> <span class="small" id="ev_status"></span>
 </div>
 </section>
 
