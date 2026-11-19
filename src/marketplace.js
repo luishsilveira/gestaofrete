@@ -85,7 +85,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
   };
 
   const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set(), nomesSemPeso = new Set();
-  const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
+  const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, fixo: 0, pesoVar: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
   const linhasPedidos = [];
 
   for (const p of pedidos) {
@@ -128,6 +128,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
         const k = c.id, g = porProduto.get(k) || { id: k, codigo: c.codigo, nome: c.nome, preco: c.preco != null ? num(c.preco) : null, fixo: !!c.fixo, qtd: 0, peso: 0, valor: 0, pedidos: new Set() };
         g.qtd += c.qtd; g.peso += c.peso; g.valor += c.valor; g.pedidos.add(p.id); porProduto.set(k, g);
         resumo.peso += c.peso;
+        if (c.fixo) resumo.fixo += c.valor; else resumo.pesoVar += c.peso;
       }
       const ka = i.produto_id ? String(i.produto_id) : 'cod:' + i.codigo;
       const a = porAnuncio.get(ka) || { id: ka, codigo: i.codigo, nome: i.produto_nome || i.descricao, kit: est.length > 0, vendas: 0, qtd: 0, total: 0, liquido: 0, peso: 0, fixo: 0, qtdFixo: 0, pesoVar: 0 };
@@ -156,7 +157,9 @@ export async function analisarMarketplace(db, opcoes = {}) {
   if (!fixos.length) avisos.add('Nenhum componente com valor fixo configurado (ex.: lacre a R$ 0,18): tudo é rateado pelo peso.');
   for (const k of ['total', 'comissao', 'frete', 'ipi', 'liquido', 'base']) resumo[k] = r2(resumo[k]);
   resumo.peso = Math.round(resumo.peso * 1000) / 1000;
-  resumo.porKg = resumo.peso > 0 ? r4(resumo.base / resumo.peso) : null;
+  // por kg sem o valor fixo (lacres): (mercadoria − valor fixo) ÷ peso dos itens rateados pelo peso
+  resumo.fixo = r2(resumo.fixo); resumo.pesoVar = Math.round(resumo.pesoVar * 1000) / 1000;
+  resumo.porKg = resumo.pesoVar > 0 ? r4((resumo.base - resumo.fixo) / resumo.pesoVar) : null;
   resumo.pctRetido = resumo.total > 0 ? Math.round((resumo.comissao + resumo.frete) / resumo.total * 1000) / 10 : null;
 
   return { periodo: { de, ate }, canal, descontarIpi, resumo, produtos, anuncios, pedidos: linhasPedidos, fixos, avisos: [...avisos] };

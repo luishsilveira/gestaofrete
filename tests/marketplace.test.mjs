@@ -58,6 +58,10 @@ t('por anúncio: kit com 2 vendas', r.j.anuncios.find((a) => a.codigo === 'D16-5
   t('anúncio: saldo = recebido − lacres', Math.abs(an.saldo - (an.liquido - an.fixo)) < 0.01 && Math.abs(an.saldo - vSac) < 0.05);
   t('anúncio: por kg = saldo ÷ peso dos sacos', Math.abs(an.pesoVar - pSac) < 0.001 && Math.abs(an.porKg - an.saldo / an.pesoVar) < 0.001);
   t('anúncio: por kg do anúncio = por kg do tubo', Math.abs(an.porKg - vSac / pSac) < 0.001);
+  const todos = r.j.pedidos.flatMap((p) => p.componentes), fx = todos.filter((c) => c.rateio === 'fixo');
+  const vFx = fx.reduce((s, c) => s + c.valor, 0), pVar = todos.filter((c) => c.rateio !== 'fixo').reduce((s, c) => s + c.peso, 0);
+  t('resumo: recebido por kg sem os lacres', Math.abs(r.j.resumo.fixo - vFx) < 0.01 && Math.abs(r.j.resumo.pesoVar - pVar) < 0.001
+    && Math.abs(r.j.resumo.porKg - (r.j.resumo.base - r.j.resumo.fixo) / r.j.resumo.pesoVar) < 0.001);
 }
 r = await api('/api/marketplace?ipi=0');
 t('sem descontar IPI', r.j.pedidos.find((p) => p.numero === '3552').base === 62.97);

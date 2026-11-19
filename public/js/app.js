@@ -491,7 +491,7 @@ function desenharMkt(){
     ${kpi('Líquido a receber',brl(r.liquido))}
     ${kpi(d.descontarIpi?'Mercadoria (sem IPI)':'Mercadoria',brl(r.base),`${n2(pc(r.base),1)}% do vendido`)}
     ${kpi('Peso vendido',n2(r.peso,1)+' kg')}
-    ${kpi('Recebido por kg',r.porKg!=null?rs4(r.porKg):'—','mercadoria ÷ peso')}
+    ${kpi('Recebido por kg',r.porKg!=null?rs4(r.porKg):'—',r.fixo>0?`(mercadoria − ${brl(r.fixo)} de lacres) ÷ ${n2(r.pesoVar,1)} kg`:'mercadoria ÷ peso')}
   </div>
   <div class="card"><h2>De cada R$ 100 vendidos no ${esc(canal)}</h2>
     <div class="faixa-leg small">${fatias.map(([n,v,c])=>`<span><i class="${c}"></i>${n}: R$ ${n2(pc(v))} (${brl(v)})</span>`).join('')}</div>
