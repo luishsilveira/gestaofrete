@@ -273,3 +273,8 @@ table.cot-doc td,table.cot-doc th{padding:3px 8px}
 .cot-doc-box li{margin:2px 0}
 pre.obs-pre{color:var(--ink);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;margin:0;max-height:220px;overflow:auto;background:#f7f9fb;border:1px solid #dde4ec;border-radius:6px;padding:6px 8px}
 .modal-caixa table.mini td{vertical-align:top}
+/* Botão Cotar (a cotação só roda ao clicar) */
+.cotar-acoes{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.cotar-acoes #btn_cotar{min-width:140px;font-size:15px}
+.card.vazio{text-align:center;padding:28px 18px;color:var(--ink)}
+.note:empty{display:none}

@@ -73,17 +73,18 @@
 <label>CPF/CNPJ do destinatário (opcional)</label><input id="doc_dest" inputmode="numeric" maxlength="18" placeholder="usado nas cotações online; sem ele, cota pelo CEP">
 <h2 style="margin-top:18px">Carga</h2>
 <div class="row2">
-<div><label>Peso real (kg)</label><input id="peso" type="number" value="150" min="0" step="0.1"></div>
-<div><label>Valor da NF (R$)</label><input id="nf" type="number" value="5000" min="0" step="0.01"></div>
+<div><label>Peso real (kg)</label><input id="peso" type="number" min="0" step="0.1" placeholder="0"></div>
+<div><label>Valor da NF (R$)</label><input id="nf" type="number" min="0" step="0.01" placeholder="0,00"></div>
 </div>
 <label>Volume (m³) — ou informe as dimensões abaixo</label>
-<input id="m3" type="number" value="0" min="0" step="0.001">
+<input id="m3" type="number" min="0" step="0.001" placeholder="0">
 <div class="row">
 <div><label>Compr. (m)</label><input id="c" type="number" value="0.16" step="0.01"></div>
 <div><label>Larg. (m)</label><input id="l" type="number" value="0.40" step="0.01"></div>
 <div><label>Alt. (m)</label><input id="a" type="number" value="0.55" step="0.01"></div>
 </div>
 <label>Qtd. de volumes com essas dimensões</label><input id="qv" type="number" value="1" min="1">
+<div class="cotar-acoes"><button type="button" class="btn" id="btn_cotar">Cotar</button><button type="button" class="btn btn2" id="btn_limpar">Limpar</button><span class="small" id="cotar_msg"></span></div>
 <!-- Regras e taxas eventuais: ocultas a pedido do Luis (16/11/2026); continuam valendo com os valores padrão abaixo -->
 <div id="regras_ocultas" hidden>
 <h2 style="margin-top:18px">Regras</h2>

@@ -40,6 +40,11 @@ public/_headers                           cache (dados sempre atualizados)
 | rodonaves.json | Maior entre mínimo, % NF e R$/kg | cidades/rodonaves.json + rodonaves-taxas-entrega.json + zonas-sp.json |
 | sao-miguel.json | Taxa + R$/kg + % NF | cidades/sao-miguel.json |
 
+## Calcular frete: botão Cotar (19/11/2026)
+- A tela abre vazia (sem destino, peso e valor da NF; dimensões padrão 0,16 × 0,40 × 0,55 m e 1 volume).
+- A cotação (tabelas + APIs das transportadoras) só roda ao clicar em **Cotar** (ou Enter num campo). Se algum dado mudar depois, os valores somem e a tela pede para cotar de novo (`COTADO` × `chaveEntrada()` em `public/js/app.js`). Isso também evita consultas às APIs a cada tecla.
+- **Limpar** zera a tela; depois de salvar aparece **Nova cotação (limpar a tela)**. O limpar não é automático ao salvar, para não perder os botões "Copiar valor do frete" e "Enviar para a proposta no Bling".
+
 ## Como o destino é identificado
 
 1. **CEP:** a cidade e a UF vêm dos Correios, pela [ViaCEP](https://viacep.com.br). Se ela não responder, a consulta vai para a [BrasilAPI](https://brasilapi.com.br). As listas das transportadoras servem só para achar a praça e o prazo de cada uma.

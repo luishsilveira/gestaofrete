@@ -40,9 +40,9 @@ D.smmap.forEach(m=>CID.set(m[0]+'|'+m[1],{c:m[0],uf:m[1]}));
 Object.entries(CAPITAL).forEach(([uf,c])=>CID.set(c+'|'+uf,{c,uf}));
 $('cidades').innerHTML=[...CID.values()].sort((a,b)=>a.c.localeCompare(b.c)).map(x=>`<option value="${x.c} - ${x.uf}">`).join('');
 const ufs=[...new Set(TABELAS.flatMap(t=>t.rotas.map(r=>r.uf)))].sort((a,b)=>UFNOME[a].localeCompare(UFNOME[b]));
-$('uf').innerHTML=ufs.map(u=>`<option value="${u}">${u} – ${UFNOME[u]}</option>`).join('');
+$('uf').innerHTML='<option value="">—</option>'+ufs.map(u=>`<option value="${u}">${u} – ${UFNOME[u]}</option>`).join('');
 
-let dest={uf:'SP',cidade:'CAMPINAS'};
+let dest={uf:'',cidade:''}; // a tela começa vazia (pedido do cliente, 19/11/2026)
 function parseCidade(v){ const m=norm(v).match(/^(.*?)\s*[-\/]\s*([A-Z]{2})$/); return m?{cidade:m[1],uf:m[2]}:{cidade:norm(v),uf:$('uf').value}; }
 function setDest(d,from){ dest=d; override={};
   if(from!=='uf') $('uf').value=d.uf;
@@ -50,6 +50,7 @@ function setDest(d,from){ dest=d; override={};
   calc(); }
 $('cid').addEventListener('change',()=>{ $('cep').value=''; setDest(parseCidade($('cid').value),'cid'); });
 $('uf').addEventListener('change',()=>{ $('cep').value=''; setDest({uf:$('uf').value,cidade:''},'uf'); });
+$('uf').value='';
 // consulta do CEP: ViaCEP, com BrasilAPI como reserva; se as duas falharem, usa as listas das transportadoras
 const CEPCACHE=new Map(); let cepSeq=0;
 async function buscaJSON(url,ms=5000){ const ac=new AbortController(); const tm=setTimeout(()=>ac.abort(),ms);
@@ -197,9 +198,11 @@ function calc(){
   const pt=Math.max(peso,m3*300);
   const ptDe=t=>(t.isentoCubM3&&m3<=t.isentoCubM3)?peso:Math.max(peso,m3*(t.cubagem||300));
   $('pt').textContent=pt.toLocaleString('pt-BR',{maximumFractionDigits:2})+' kg'+(m3>0?`  (cubado: ${(m3*300).toLocaleString('pt-BR',{maximumFractionDigits:2})} kg)`:'');
-  $('destinfo').innerHTML=dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}${dest.fonteCep?` <span class="small">(cidade confirmada pelos Correios via ${dest.fonteCep})</span>`:(dest.cep?` <span class="small">(cidade pela faixa de CEP das listas das transportadoras; ${dest.naoCorreios?'os Correios não reconheceram este CEP, confira o número':'consulta aos Correios indisponível'})</span>`:'')}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
+  $('destinfo').innerHTML=!dest.uf?'':dest.cidade?`Destino: <b>${dest.cidade} / ${uf}</b>${dest.cep?' · CEP '+String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2'):''}${dest.fonteCep?` <span class="small">(cidade confirmada pelos Correios via ${dest.fonteCep})</span>`:(dest.cep?` <span class="small">(cidade pela faixa de CEP das listas das transportadoras; ${dest.naoCorreios?'os Correios não reconheceram este CEP, confira o número':'consulta aos Correios indisponível'})</span>`:'')}`:(dest.semLista?`CEP ${String(dest.cep).padStart(8,'0').replace(/(\d{5})(\d{3})/,'$1-$2')} é de <b>${UFNOME[uf]||uf}</b>, mas a cidade não está nas listas das transportadoras. Digite o nome da cidade acima.`:`Destino: <b>${UFNOME[uf]}</b> (sem cidade: escolha a praça de cada transportadora)`);
   const op={tde:$('o_tde').checked,tda:$('o_tda').checked,trt:$('o_trt').checked,ag:$('o_ag').checked,pal:$('o_pal').checked,int:false,icms:$('icms').checked};
   $('icmsinfo').textContent=op.icms?`Alíquota aplicada RS → ${uf}: ${aliqICMS(uf)}%`:'Valores sem ICMS';
+  // Só cota quando o usuário clica em "Cotar"; se algum dado mudar depois, os valores somem até cotar de novo.
+  if(COTADO!==chaveEntrada()){ ULT=null; telaSemCotacao(); return; }
   const res=[], nao=[];
   TABELAS.forEach(t=>{ const rv=resolver(t);
     if(rv.erro){ nao.push({t,msg:rv.erro}); return; }
@@ -294,6 +297,48 @@ function calc(){
 
 document.querySelectorAll('#tonmode button').forEach(b=>b.onclick=()=>{tonMode=b.dataset.m;document.querySelectorAll('#tonmode button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 ['simples','peso','nf','m3','c','l','a','qv','icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal','doc_dest'].forEach(id=>$(id).addEventListener('input',calc));
+
+// ---------- Botão Cotar / Limpar (19/11/2026) ----------
+// A cotação (tabelas + APIs das transportadoras) só roda ao clicar em "Cotar" (ou Enter num campo).
+// COTADO guarda os dados usados na última cotação; mudou algum, a tela pede para cotar de novo.
+let COTADO=null;
+const chaveEntrada=()=>JSON.stringify([dest.cep||'',dest.uf||'',dest.cidade||'',...['peso','nf','m3','c','l','a','qv','doc_dest'].map(id=>$(id).value.trim()),
+  ...['icms','dep','o_tde','o_tda','o_trt','o_ag','o_pal'].map(id=>$(id).checked),tonMode]);
+function faltaParaCotar(){
+  if(!dest.uf) return 'Informe o CEP ou a cidade de destino.';
+  if(!(+$('peso').value>0)) return 'Informe o peso.';
+  if(!(+$('nf').value>0)) return 'Informe o valor da NF.';
+  return null;
+}
+function telaSemCotacao(){
+  $('salvar').classList.add('hide'); $('progresso').classList.add('hide'); $('avisos').innerHTML='';
+  const falta=faltaParaCotar();
+  $('out').innerHTML=`<div class="card vazio"><b>${COTADO?'Os dados mudaram desde a última cotação.':'Nenhuma cotação ainda.'}</b><br>
+    <span class="small">${falta?esc(falta)+' Depois clique em <b>Cotar</b>.':'Confira os dados e clique em <b>Cotar</b> para buscar os valores das transportadoras.'}</span></div>`;
+  $('cotar_msg').textContent='';
+}
+function cotarAgora(){
+  const falta=faltaParaCotar();
+  if(falta){ $('cotar_msg').className='small err'; $('cotar_msg').textContent=falta; return; }
+  COTADO=chaveEntrada(); ONL.atual=null; // consulta as APIs de novo (o servidor reaproveita a consulta igual do mesmo dia)
+  $('cotar_msg').className='small'; $('cotar_msg').textContent='';
+  calc();
+  if(window.innerWidth<1000) $('out').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('btn_cotar').onclick=cotarAgora;
+['cep','cid','doc_dest','peso','nf','m3','c','l','a','qv'].forEach(id=>$(id).addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); setTimeout(cotarAgora,50); } }));
+// Limpa a tela para a próxima cotação (dimensões e volumes voltam ao padrão).
+function limparTela(){
+  ['cep','cid','doc_dest','peso','nf','m3','b_num','s_cliente','s_pedido','s_obs'].forEach(id=>{ if($(id)) $(id).value=''; });
+  $('c').value='0.16'; $('l').value='0.40'; $('a').value='0.55'; $('qv').value='1';
+  BLING_PED=null; $('b_status').innerHTML=''; $('b_cots').innerHTML=''; $('s_status').textContent=''; $('s_transp').dataset.escolhida='';
+  MAN_PEND=[]; SALVA=null; MAN_GRAV=[]; if(typeof desenharListaPend==='function') desenharListaPend();
+  COTADO=null; ONL.atual=null; override={};
+  setDest({uf:'',cidade:''},'limpar'); atualizarVinculo();
+  window.scrollTo({top:0,behavior:'smooth'}); $('b_num').focus();
+}
+$('btn_limpar').onclick=limparTela;
+document.addEventListener('click',e=>{ if(e.target.closest('button[data-novacot]')) limparTela(); });
 
 // Nº da cotação devolvido pela API da transportadora (para conferir ou fechar o frete com ela), com botão de copiar.
 const numCotOnline=x=>x.on&&x.on.id?` · cotação nº <b class="mono">${esc(x.on.id)}</b> <a href="#" class="small" data-copiar="${esc(x.on.id)}" title="Copiar o nº da cotação">copiar</a>`:'';
@@ -784,6 +829,7 @@ $('s_btn').onclick=async()=>{
   try{ const j=await api('/api/cotacoes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
     $('s_status').className='small ok'; $('s_status').textContent=`Cotação nº ${j.id} salva${vinc?` e vinculada ${aoDoc(vinc.tipo)} `+docNome(vinc.tipo,vinc.numero):''}${j.valores_manuais?` com ${j.valores_manuais} valor(es) manual(is)`:''}.`;
     if(vinc&&vinc.tipo==='proposta') $('s_status').innerHTML=esc($('s_status').textContent)+botaoEnvioBling(j.id);
+    $('s_status').insertAdjacentHTML('beforeend',' <button class="btn btn-mini btn2" type="button" data-novacot>Nova cotação (limpar a tela)</button>');
     if(vinc){ vinc.cotacoes=[{id:j.id,criado_em:j.criado_em,usuario:'você',transportadora_escolhida:corpo.transportadora_escolhida,valor_escolhido:corpo.valor_escolhido,via:'direto'},...(vinc.cotacoes||[])]; mostrarCotacoesDoc(); } SALVA={id:j.id,chave:chaveCalc()}; MAN_GRAV=MAN_PEND.map(m=>({...m})); MAN_PEND=[]; desenharListaPend();
   }catch(e){ $('s_status').className='small err'; $('s_status').textContent='Não foi possível salvar: '+e.message; }
   finally{ b.disabled=false; }
@@ -1261,5 +1307,5 @@ async function analiseDivergencias(){
   }catch(e){ $('h_div').innerHTML='<div class="card small err">Erro: '+esc(e.message)+'</div>'; }
 }
 
-renderTab(); setDest({uf:'SP',cidade:'CAMPINAS'}); irPara(location.hash.slice(1)||'calc',false);
+renderTab(); setDest({uf:'',cidade:''},'limpar'); irPara(location.hash.slice(1)||'calc',false);
 }
