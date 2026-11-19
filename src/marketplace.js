@@ -85,7 +85,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
   };
 
   const porProduto = new Map(), porAnuncio = new Map(), avisos = new Set(), nomesSemPeso = new Set();
-  const resumo = { pedidos: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, fixo: 0, pesoVar: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
+  const resumo = { pedidos: 0, precoCheio: 0, desconto: 0, total: 0, comissao: 0, frete: 0, ipi: 0, liquido: 0, base: 0, peso: 0, fixo: 0, pesoVar: 0, semTaxas: 0, semItens: 0, semPeso: 0 };
   const linhasPedidos = [];
 
   for (const p of pedidos) {
@@ -98,6 +98,12 @@ export async function analisarMarketplace(db, opcoes = {}) {
     const base = liquido - (descontarIpi ? ipi : 0); // valor a dividir entre os produtos
     resumo.pedidos++; resumo.total += total; resumo.comissao += comissao; resumo.frete += frete; resumo.ipi += ipi; resumo.liquido += liquido; resumo.base += base;
     if (!p.tem_taxas) resumo.semTaxas++;
+    // preço cheio = preço dos itens × quantidade, como o painel de vendas do marketplace (sem IPI);
+    // sem itens importados: total no Bling − IPI. Desconto = preço cheio − valor base (promoção, cupom, preço por quantidade…)
+    const somaIt = its.reduce((s, i) => s + (num(i.valor_total) || num(i.valor) * num(i.quantidade)), 0);
+    p.preco_cheio = r2(somaIt > 0 ? somaIt : Math.max(p.total_bling - ipi, 0) || total);
+    p.desconto = r2(p.preco_cheio - total);
+    resumo.precoCheio += p.preco_cheio; resumo.desconto += p.desconto;
     if (!its.length) { resumo.semItens++; linhasPedidos.push({ ...p, liquido: r2(liquido), base: r2(base), componentes: [], aviso: 'pedido sem itens importados' }); continue; }
 
     const somaItens = its.reduce((s, i) => s + (num(i.valor_total) || num(i.valor) * num(i.quantidade)), 0);
@@ -156,6 +162,7 @@ export async function analisarMarketplace(db, opcoes = {}) {
   if (resumo.semTaxas) avisos.add(`${resumo.semTaxas} pedido(s) sem as taxas do marketplace no Bling: considerados sem comissão e sem frete.`);
   if (!fixos.length) avisos.add('Nenhum componente com valor fixo configurado (ex.: lacre a R$ 0,18): tudo é rateado pelo peso.');
   for (const k of ['total', 'comissao', 'frete', 'ipi', 'liquido', 'base']) resumo[k] = r2(resumo[k]);
+  resumo.precoCheio = r2(resumo.precoCheio); resumo.desconto = r2(resumo.desconto);
   resumo.peso = Math.round(resumo.peso * 1000) / 1000;
   // por kg sem o valor fixo (lacres): (mercadoria − valor fixo) ÷ peso dos itens rateados pelo peso
   resumo.fixo = r2(resumo.fixo); resumo.pesoVar = Math.round(resumo.pesoVar * 1000) / 1000;

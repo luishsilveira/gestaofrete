@@ -28,6 +28,9 @@ let r = await api('/api/marketplace?ipi=1'); // descontar IPI é opcional (desma
 const p102 = r.j.pedidos.find((p) => p.numero === '3552');
 const p3510 = r.j.pedidos.find((p) => p.numero === '3510');
 t('3510: vendido = valor base 116; líquido 79,23 como no Bling', p3510.total === 116 && p3510.liquido === 79.23 && p3510.total_bling === 129.49);
+t('preço cheio = itens × quantidade; desconto = preço cheio − valor base', p3510.preco_cheio === 125.41 && p3510.desconto === 9.41
+  && r.j.resumo.precoCheio === r.j.pedidos.reduce((s, p) => Math.round((s + p.preco_cheio) * 100) / 100, 0)
+  && Math.abs(r.j.resumo.precoCheio - r.j.resumo.desconto - r.j.resumo.total) < 0.01);
 t('só pedidos do Mercado Livre', r.j.resumo.pedidos === 3 && !r.j.pedidos.some((p) => p.numero === '5001'));
 t('pedido 3552: mercadoria = 94 − 11,28 − 19,75 − 3,12 = 59,85', p102.base === 59.85 && p102.liquido === 62.97);
 t('sem valor fixo: tudo pelo peso', p102.componentes.every((c) => c.rateio === 'peso') && r.j.avisos.some((a) => /valor fixo/.test(a)));
