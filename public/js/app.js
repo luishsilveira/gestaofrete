@@ -1183,13 +1183,15 @@ async function carregarHistorico(){
     $('h_tab').innerHTML=L.length?'<tr><th>Nº</th><th>Data</th><th>Usuário</th><th>Cliente / pedido</th><th>Destino</th><th class="n">Peso (kg)</th><th class="n">NF</th><th>Melhor opção</th><th class="n">Valor</th><th>Prazo</th><th class="n">Valor manual</th></tr>'+
       L.map(c=>`<tr class="lin" data-id="${c.id}"><td>${c.id}</td><td>${new Date(c.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</td><td class="small">${esc(c.usuario)}</td>
         <td>${esc(c.cliente||'')}${(c.documentos||[]).length?`<br><span class="small">🔗 ${(c.documentos).map(d=>docRotulo(d.tipo,d.numero)).join(' · ')}</span>`:c.pedido?` <span class="small">#${esc(c.pedido)}</span>`:''}</td><td>${esc(c.cidade||'')}/${esc(c.uf||'')} <span class="small">${esc(c.cep||'')}</span></td>
-        <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}${c.transportadora_escolhida&&c.transportadora_escolhida!==c.melhor_transportadora?`<br><span class="small">escolhida: ${esc(c.transportadora_escolhida)} (${brl(+c.valor_escolhido)})</span>`:''}</td>
+        <td class="n">${(+c.peso_taxado).toLocaleString('pt-BR')}</td><td class="n">${brl(+c.valor_nf)}</td><td>${esc(c.melhor_transportadora)}${nCotOn(c,c.melhor_transportadora)}${c.transportadora_escolhida&&c.transportadora_escolhida!==c.melhor_transportadora?`<br><span class="small">escolhida: ${esc(c.transportadora_escolhida)} (${brl(+c.valor_escolhido)})</span>${nCotOn(c,c.transportadora_escolhida)}`:''}</td>
         <td class="n">${brl(+c.melhor_valor)}</td><td>${c.melhor_prazo?fp(c.melhor_prazo):'—'}</td>
         <td class="n small">${(c.manuais||[]).map(m=>`${esc(m.transportadora)}: ${brl(+m.valor_manual)}<br>${difTxt(+m.valor_manual,+m.valor_calculado)}`).join('<br>')||'—'}</td></tr>`).join(''):'';
-    $('h_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=()=>detalheHistorico(tr.dataset.id));
+    $('h_tab').querySelectorAll('tr.lin').forEach(tr=>tr.onclick=e=>{ if(e.target.closest('a')) return; detalheHistorico(tr.dataset.id); });
   }catch(e){ $('h_status').textContent='Erro ao carregar o histórico: '+e.message; }
 }
 const confirmarRemocao=()=>confirm('Remover este valor manual?');
+// nº da cotação online da transportadora nesta cotação salva (lista do Histórico)
+const nCotOn=(c,tr)=>{ const n=c.cotacoes_online&&c.cotacoes_online[tr]; return n?`<br><span class="small"><span class="badge b-api">online</span> nº <b class="mono">${esc(n)}</b> <a href="#" data-copiar="${esc(n)}">copiar</a></span>`:''; };
 const docsCot=L=>L.map(d=>`🔗 ${docRotulo(d.tipo,d.numero)}${d.via!=='direto'?` <span class="small">(${d.via==='pedido'?'NF do pedido':'pedido da NF'})</span>`:''}`).join('<br>');
 async function detalheHistorico(id){
   $('h_div').innerHTML='';

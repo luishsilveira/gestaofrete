@@ -294,6 +294,7 @@ async function listarCotacoes(url, env, ctx) {
     // também pelo número do pedido, da proposta ou da NF ligados no Bling
     cond.push(`(c.cidade ILIKE $2 OR c.cliente ILIKE $2 OR c.pedido ILIKE $2 OR c.usuario ILIKE $2
               OR c.melhor_transportadora ILIKE $2 OR c.cep ILIKE $2
+              OR c.resultados::text ILIKE '%"cotacao_online": "' || trim(both '%' from $2) || '"%'
               OR EXISTS (SELECT 1 FROM json_array_elements(COALESCE((${DOCS_DA_COT}), '[]'::json)) e WHERE e->>'numero' ILIKE $2))`);
   }
   if (url.searchParams.get('manual') === '1') cond.push('EXISTS (SELECT 1 FROM cotacao_valores_manuais m WHERE m.cotacao_id = c.id)');
@@ -304,6 +305,10 @@ async function listarCotacoes(url, env, ctx) {
               c.valor_nf, c.volumes, c.com_icms, c.melhor_transportadora, c.melhor_valor, c.melhor_prazo,
               c.transportadora_escolhida, c.valor_escolhido, c.bling_pedido_id, c.bling_proposta_id, c.bling_nota_id,
               (${DOCS_DA_COT}) AS documentos,
+              -- nº da cotação online de cada transportadora (Braspress, SSW…): { transportadora: nº }
+              (SELECT jsonb_object_agg(r->>'transportadora', r->>'cotacao_online')
+                 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(c.resultados) = 'array' THEN c.resultados ELSE '[]'::jsonb END) r
+                WHERE r->>'fonte_valor' = 'online' AND COALESCE(r->>'cotacao_online', '') <> '') AS cotacoes_online,
               (SELECT json_agg(json_build_object('transportadora', m.transportadora, 'valor_manual', m.valor_manual,
                         'valor_calculado', m.valor_calculado) ORDER BY m.id)
                  FROM cotacao_valores_manuais m WHERE m.cotacao_id = c.id) AS manuais

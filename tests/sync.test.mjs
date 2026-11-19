@@ -199,6 +199,13 @@ r = await api(`/api/cotacoes/${idNf}`);
 t('cotação da NF mostra o pedido da NF', r.j.documentos.some((d) => d.tipo === 'pedido' && d.via === 'nota' && d.numero === numPed));
 r = await api('/api/cotacoes?busca=12345');
 t('histórico busca pelo nº da NF ligada', [idPed, idNf].every((id) => r.j.cotacoes.some((c) => +c.id === id)) && r.j.cotacoes.find((c) => +c.id === idPed).documentos.length === 2);
+r = await api('/api/cotacoes', 'POST', { resultados: [{ transportadora: 'Braspress', total: 99, fonte_valor: 'online', cotacao_online: '5551234' }, { transportadora: 'TJB', total: 120 }], melhor_transportadora: 'Braspress' });
+const idOn = r.j.id;
+r = await api('/api/cotacoes');
+t('lista traz o nº da cotação online por transportadora', r.j.cotacoes.find((c) => +c.id === idOn).cotacoes_online.Braspress === '5551234' && !r.j.cotacoes.find((c) => +c.id === idPed).cotacoes_online);
+r = await api('/api/cotacoes?busca=5551234');
+t('busca pelo nº da cotação online', r.j.cotacoes.length === 1 && +r.j.cotacoes[0].id === idOn);
+psql(`DELETE FROM cotacoes WHERE id = ${idOn};`); // não entra nas contas das divergências abaixo
 r = await api('/api/bling/pedido?numero=12345');
 t('busca na calculadora devolve as cotações do documento', r.status === 200 && r.j.cotacoes.length === 2);
 
