@@ -130,9 +130,12 @@ export async function analisarMarketplace(db, opcoes = {}) {
         resumo.peso += c.peso;
       }
       const ka = i.produto_id ? String(i.produto_id) : 'cod:' + i.codigo;
-      const a = porAnuncio.get(ka) || { id: ka, codigo: i.codigo, nome: i.produto_nome || i.descricao, kit: est.length > 0, vendas: 0, qtd: 0, total: 0, liquido: 0, peso: 0 };
+      const a = porAnuncio.get(ka) || { id: ka, codigo: i.codigo, nome: i.produto_nome || i.descricao, kit: est.length > 0, vendas: 0, qtd: 0, total: 0, liquido: 0, peso: 0, fixo: 0, qtdFixo: 0, pesoVar: 0 };
       a.vendas++; a.qtd += qtd; a.total += somaItens > 0 ? total * vItem / somaItens : total / its.length; a.liquido += parte;
-      a.peso += L.reduce((s, c) => s + c.pesoUnit * c.qtd, 0); porAnuncio.set(ka, a);
+      a.peso += L.reduce((s, c) => s + c.pesoUnit * c.qtd, 0);
+      // valor fixo (lacre) sai do saldo; o "por kg" do anúncio é só do que é rateado pelo peso (o saco)
+      for (const c of L) { if (c.fixo) { a.fixo += c.valor; a.qtdFixo += c.qtd; } else a.pesoVar += c.pesoUnit * c.qtd; }
+      porAnuncio.set(ka, a);
     }
     linhasPedidos.push({ ...p, liquido: r2(liquido), base: r2(base), componentes: comps });
   }
@@ -144,7 +147,8 @@ export async function analisarMarketplace(db, opcoes = {}) {
     pctPreco: g.preco > 0 && g.qtd > 0 ? Math.round(g.valor / g.qtd / g.preco * 1000) / 10 : null,
   })).sort((a, b) => b.valor - a.valor);
   const anuncios = [...porAnuncio.values()].map((a) => ({ ...a, total: r2(a.total), liquido: r2(a.liquido), peso: Math.round(a.peso * 1000) / 1000,
-    liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.peso > 0 ? r4(a.liquido / a.peso) : null,
+    fixo: r2(a.fixo), saldo: r2(a.liquido - a.fixo), pesoVar: Math.round(a.pesoVar * 1000) / 1000,
+    liquidoPorVenda: a.qtd > 0 ? r2(a.liquido / a.qtd) : null, porKg: a.pesoVar > 0 ? r4((a.liquido - a.fixo) / a.pesoVar) : null,
     pctRecebido: a.total > 0 ? Math.round(a.liquido / a.total * 1000) / 10 : null })).sort((a, b) => b.liquido - a.liquido);
 
   if (nomesSemPeso.size) avisos.add(`Sem peso cadastrado no Bling (ficam fora do rateio pelo peso; configure como valor fixo ou cadastre o peso): ${[...nomesSemPeso].slice(0, 8).join('; ')}${nomesSemPeso.size > 8 ? '…' : ''}.`);

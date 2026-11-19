@@ -24,7 +24,7 @@ INSERT INTO pedidos_bling (id, numero, numero_loja, data, canal, cliente, valor_
 INSERT INTO pedido_itens (doc_id, seq, produto_id, codigo, descricao, quantidade, valor, valor_total) VALUES
  (102,1,503,'D16-50','Kit',1,95.88,95.88),(103,1,503,'D16-50','Kit',1,95.88,95.88),(103,2,504,'AVULSO','Avulso',2,12,24),(104,1,501,'D110160','Tubo',1000,1.18,1180),(105,1,503,'D16-50','Kit',1,125.41,125.41);
 `);
-let r = await api('/api/marketplace');
+let r = await api('/api/marketplace?ipi=1'); // descontar IPI é opcional (desmarcado por padrão)
 const p102 = r.j.pedidos.find((p) => p.numero === '3552');
 const p3510 = r.j.pedidos.find((p) => p.numero === '3510');
 t('3510: vendido = valor base 116; líquido 79,23 como no Bling', p3510.total === 116 && p3510.liquido === 79.23 && p3510.total_bling === 129.49);
@@ -36,7 +36,7 @@ t('sugere o lacre', r.j.sugestoes.some((s) => s.termo === 'LACRE'));
 psql(`INSERT INTO produtos_bling (id, codigo, nome, formato, preco, peso_bruto) VALUES (506, null, 'KIT LACRE FRONTEC BRANCO', 'S', 0.18, 0);`);
 r = await api('/api/marketplace/fixos', 'POST', { fixos: [{ termo: 'kit lacre frontec', valor: '0,18' }, { termo: 'NAOEXISTE', valor: 1 }] });
 t('fixo por parte do nome pega as variações (com e sem código)', r.j.fixos[0].produtos.map((p) => p.id).sort().join() === '502,506' && r.j.fixos[1].produtos.length === 0);
-r = await api('/api/marketplace');
+r = await api('/api/marketplace?ipi=1');
 const c102 = r.j.pedidos.find((p) => p.numero === '3552').componentes;
 const lacre = c102.find((c) => c.codigo === 'LACRE'), tubo = c102.find((c) => c.codigo === 'D110160');
 t('lacre: 50 × R$ 0,18 = R$ 9,00', lacre.valor === 9 && lacre.rateio === 'fixo');
@@ -48,12 +48,23 @@ t('pedido com 2 itens: rateio pelo valor; sem peso → pela quantidade', Math.ab
 const prodTubo = r.j.produtos.find((p) => p.codigo === 'D110160');
 t('por produto: tubo em 2 pedidos, 100 un, R$/kg e % do preço', prodTubo.pedidos === 3 && prodTubo.qtd === 150);
 t('por anúncio: kit com 2 vendas', r.j.anuncios.find((a) => a.codigo === 'D16-50').vendas === 3);
+{ // por kg do anúncio sem o valor fixo dos lacres
+  const an = r.j.anuncios.find((a) => a.codigo === 'D16-50');
+  const comps = r.j.pedidos.flatMap((p) => p.componentes.filter((c) => c.item === 'D16-50'));
+  const lac = comps.filter((c) => c.rateio === 'fixo'), sac = comps.filter((c) => c.rateio !== 'fixo');
+  const vLac = lac.reduce((s, c) => s + c.valor, 0), qLac = lac.reduce((s, c) => s + c.qtd, 0);
+  const vSac = sac.reduce((s, c) => s + c.valor, 0), pSac = sac.reduce((s, c) => s + c.peso, 0);
+  t('anúncio: coluna dos lacres (qtd × R$ 0,18)', qLac > 0 && an.qtdFixo === qLac && Math.abs(an.fixo - qLac * 0.18) < 0.01 && Math.abs(an.fixo - vLac) < 0.01);
+  t('anúncio: saldo = recebido − lacres', Math.abs(an.saldo - (an.liquido - an.fixo)) < 0.01 && Math.abs(an.saldo - vSac) < 0.05);
+  t('anúncio: por kg = saldo ÷ peso dos sacos', Math.abs(an.pesoVar - pSac) < 0.001 && Math.abs(an.porKg - an.saldo / an.pesoVar) < 0.001);
+  t('anúncio: por kg do anúncio = por kg do tubo', Math.abs(an.porKg - vSac / pSac) < 0.001);
+}
 r = await api('/api/marketplace?ipi=0');
 t('sem descontar IPI', r.j.pedidos.find((p) => p.numero === '3552').base === 62.97);
 r = await api('/api/marketplace?canal=marketplace&de=2000-01-01&ate=lixo');
 t('todos marketplaces e datas inválidas', r.status === 200 && r.j.resumo.pedidos === 3);
 psql(`UPDATE produtos_bling SET peso_bruto = 0 WHERE id = 502; UPDATE app_config SET valor = '[]' WHERE chave = 'valores_fixos';`);
-r = await api('/api/marketplace');
+r = await api('/api/marketplace?ipi=1');
 const c3510 = r.j.pedidos.find((p) => p.numero === '3510').componentes;
 t('lacre sem peso e sem valor fixo: fica com zero, tubo com tudo, aviso', c3510.find((c) => c.codigo === 'LACRE').valor === 0 && c3510.find((c) => c.codigo === 'LACRE').rateio === 'sem peso'
   && c3510.find((c) => c.codigo === 'D110160').valor === 75.15 && r.j.avisos.some((a) => /Sem peso cadastrado.*LACRE/.test(a)));
