@@ -392,10 +392,10 @@ async function carregarIntegracoes(){
     $('i_rem').innerHTML=`Cotações online saem em nome de <b>${esc(rm.nome||fmtCnpj(rm.cnpj)||'—')}</b>${rm.cnpj?' ('+fmtCnpj(rm.cnpj)+')':''}, origem CEP ${fmtCep(+rm.cep||0)}${rm.cepPresumido?' (presumido)':''}. <a href="#cfg">Alterar</a>`;
     $('i_lista').innerHTML=s.integracoes.map(i=>{
       const pill=!i.configurada?(i.erroConfig?'<span class="pill err">erro na configuração</span>':'<span class="pill off">não configurada</span>'):i.ativa?'<span class="pill ok">ativa</span>':'<span class="pill off">desativada</span>';
-      const tipo=i.tipo==='ssw'?'Web service SSW':i.tipo==='braspress'?'API própria da Braspress':esc(i.tipo);
+      const tipo=i.tipo==='ssw'?'Web service SSW':i.tipo==='braspress'?'API própria da Braspress':i.tipo==='saomiguel'?'API própria da São Miguel (máx. 20 consultas/min)':esc(i.tipo);
       const tab=i.tabela?(TABELAS.find(t=>t.id===i.tabela)||{}).transportadora:null;
-      if(!i.configurada) return `<div class="integ"><h3>${esc(i.transportadora||(i.tipo==='ssw'?'Transportadoras SSW':i.tipo))}${pill}</h3><div class="tp">${tipo}</div>
-        <p class="small">${i.erroConfig?esc(i.erroConfig):i.tipo==='ssw'?'Nenhuma transportadora SSW cadastrada. Use "Nova transportadora SSW" abaixo.':'Sem credenciais. Use "Nova conta Braspress" abaixo.'}</p></div>`;
+      if(!i.configurada) return `<div class="integ"><h3>${esc(i.transportadora||(i.tipo==='ssw'?'Transportadoras SSW':i.tipo==='saomiguel'?'Expresso São Miguel':i.tipo==='braspress'?'Braspress':i.tipo))}${pill}</h3><div class="tp">${tipo}</div>
+        <p class="small">${i.erroConfig?esc(i.erroConfig):i.tipo==='ssw'?'Nenhuma transportadora SSW cadastrada. Use "Nova transportadora SSW" abaixo.':i.tipo==='saomiguel'?'Sem credenciais. Use "Nova chave São Miguel" abaixo.':'Sem credenciais. Use "Nova conta Braspress" abaixo.'}</p></div>`;
       const u=i.ultima;
       return `<div class="integ"><h3>${esc(i.transportadora)}${pill}</h3><div class="tp">${tipo}${tab?' · compara com a tabela '+esc(tab):' · sem tabela própria'}${i.origem?' · credenciais: '+esc(i.origem):''}</div>
         <dl><dt>Consultas (30 dias)</dt><dd>${i.consultas30}${i.consultas30?` · ${Math.round(i.sucesso30/i.consultas30*100)}% com sucesso`:''}</dd>
@@ -654,6 +654,7 @@ function desenharCredenciais(){
 }
 $('cr_ssw').onclick=()=>CRED&&formCredencial(CRED.find(t=>t.tipo==='ssw'),null);
 $('cr_bp').onclick=()=>CRED&&formCredencial(CRED.find(t=>t.tipo==='braspress'),null);
+$('cr_sm').onclick=()=>CRED&&formCredencial(CRED.find(t=>t.tipo==='saomiguel'),null);
 function formCredencial(t,e){
   const campo=c=>{ const v=e&&!c.secreto?e[c.k]:'';
     if(c.tipo==='tabela') return `<div><label>${esc(c.rotulo)} (opcional)</label><select data-k="${c.k}"><option value="">nenhuma (só cotação online)</option>${TABELAS.map(x=>`<option value="${esc(x.id)}" ${v===x.id?'selected':''}>${esc(x.transportadora)}</option>`).join('')}</select></div>`;

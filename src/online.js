@@ -4,9 +4,10 @@ import { so, slug, lerJSONSecret, tipoDoErro, CEP_ORIGEM_PADRAO, normalizarPedid
 import { lerCredenciais, CAMPOS } from './credenciais.js';
 import * as braspress from './apis/braspress.js';
 import * as ssw from './apis/ssw.js';
+import * as saomiguel from './apis/saomiguel.js';
 
 // Para incluir uma transportadora nova: criar src/apis/<nome>.js e acrescentar aqui.
-export const CONECTORES = [braspress, ssw];
+export const CONECTORES = [braspress, ssw, saomiguel];
 const TEMPO_LIMITE_MS = 15000;
 
 export const SCHEMA_ONLINE = `
@@ -58,7 +59,7 @@ END $$;
 
 // Integrações configuradas: credenciais cadastradas na tela (banco, criptografadas) + secrets antigos do
 // Cloudflare. Quando a mesma entrada existe nos dois, vale a da tela.
-const SECRET_DO_TIPO = { ssw: 'SSW_TRANSPORTADORAS', braspress: 'BRASPRESS_CONTAS' };
+const SECRET_DO_TIPO = { ssw: 'SSW_TRANSPORTADORAS', braspress: 'BRASPRESS_CONTAS', saomiguel: 'SAOMIGUEL_CONTAS' };
 export async function todasIntegracoes(env, db) {
   const cred = db ? await lerCredenciais(env, db) : {};
   const L = [];
@@ -71,7 +72,7 @@ export async function todasIntegracoes(env, db) {
     const juntos = [...doBanco, ...doSecret.filter((x) => !doBanco.some((y) => k(y) === k(x)))];
     try {
       L.push(...c.integracoes({ [nome]: JSON.stringify(juntos) }).map((i) => ({ ...i,
-        origem: c.tipo === 'braspress' ? (doBanco.length ? (doSecret.length ? 'tela e Cloudflare' : 'tela') : 'Cloudflare')
+        origem: c.tipo !== 'ssw' ? (doBanco.length ? (doSecret.length ? 'tela e Cloudflare' : 'tela') : 'Cloudflare')
           : (doBanco.some((x) => i.id === 'ssw-' + slug(x.id || x.transportadora)) ? 'tela' : 'Cloudflare') })));
     } catch (e) { L.push({ id: c.tipo, tipo: c.tipo, transportadora: c.tipo, erroConfig: e.message }); }
     if (cred[c.tipo] && cred[c.tipo].erro) L.push({ id: c.tipo + '-credenciais', tipo: c.tipo, transportadora: def.nome, erroConfig: cred[c.tipo].erro });
@@ -174,6 +175,12 @@ async function cotarUma(env, db, integ, req, usuario, { fetchImpl = fetch, semCa
           AND criado_em >= date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo'
         ORDER BY criado_em DESC LIMIT 1`, [integ.id, chave]);
     if (c.rows.length) { const x = c.rows[0]; return { ...base, ok: true, total: +x.total, prazo: x.prazo, id: x.id_cotacao, doCache: true }; }
+  }
+  // limite de consultas por minuto da transportadora (São Miguel: 20/min, acima disso bloqueia 30 min): cai para a tabela
+  const lim = conector(integ.tipo).limitePorMinuto;
+  if (lim) {
+    const n = +(await db.query(`SELECT COUNT(*) AS n FROM api_consultas WHERE integracao = $1 AND criado_em > now() - interval '60 seconds'`, [integ.id])).rows[0].n;
+    if (n >= lim) return { ...base, ok: false, erro: `${integ.transportadora}: limite de ${lim} consultas por minuto atingido; tente de novo em 1 minuto (valor da tabela).`, tipoErro: 'falha', ms: 0 };
   }
   const ini = Date.now();
   let r;

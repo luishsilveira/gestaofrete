@@ -6,6 +6,7 @@
 // Formato guardado por conector (o mesmo dos secrets antigos):
 //   ssw:       [{ transportadora, dominio, login, senha, cnpjPagador, tabela?, senhaPagador? }]
 //   braspress: [{ cnpj, usuario, senha }]
+//   saomiguel: [{ customer, accessKey }]
 
 export const SCHEMA_CREDENCIAIS = `
 CREATE TABLE IF NOT EXISTS integracoes_credenciais (
@@ -37,6 +38,14 @@ export const CAMPOS = {
       { k: 'cnpj', rotulo: 'CNPJ da Proloplast', obrig: true },
       { k: 'usuario', rotulo: 'Usuário da API', obrig: true, ex: '12995553000100_PRD' },
       { k: 'senha', rotulo: 'Senha da API', obrig: true, secreto: true },
+    ],
+  },
+  saomiguel: {
+    nome: 'Expresso São Miguel (chave por CNPJ)',
+    chave: 'customer',
+    campos: [
+      { k: 'customer', rotulo: 'CNPJ (Customer)', obrig: true, ex: '12995553000100' },
+      { k: 'accessKey', rotulo: 'Chave de acesso (Access_Key)', obrig: true, secreto: true },
     ],
   },
 };
@@ -88,11 +97,11 @@ export async function salvarCredencial(env, db, tipo, d, original, usuario) {
   for (const c of def.campos) {
     let v = d[c.k] == null ? '' : String(d[c.k]).trim();
     if (c.secreto && !v && ant) v = ant[c.k] || '';
-    if (['cnpj', 'cnpjPagador'].includes(c.k)) v = so(v);
+    if (['cnpj', 'cnpjPagador', 'customer'].includes(c.k)) v = so(v);
     if (c.obrig && !v) throw Object.assign(new Error(`Preencha: ${c.rotulo}.`), { status: 400 });
     if (v) novo[c.k] = v;
   }
-  if (tipo === 'braspress' && novo.cnpj.length !== 14) throw Object.assign(new Error('CNPJ inválido.'), { status: 400 });
+  if ((tipo === 'braspress' && novo.cnpj.length !== 14) || (tipo === 'saomiguel' && novo.customer.length !== 14)) throw Object.assign(new Error('CNPJ inválido.'), { status: 400 });
   if (lista.some((x) => x !== ant && igual(tipo, x, novo))) throw Object.assign(new Error('Já existe um cadastro com esse ' + (tipo === 'ssw' ? 'nome de transportadora.' : 'CNPJ.')), { status: 400 });
   const nova = ant ? lista.map((x) => (x === ant ? { ...ant, ...novo } : x)) : [...lista, novo];
   await gravar(env, db, tipo, nova, usuario);
@@ -113,7 +122,7 @@ async function gravar(env, db, tipo, lista, usuario) {
 // Lista para a tela, sem senhas (só indica se estão preenchidas).
 export async function listarCredenciais(env, db) {
   const cred = await lerCredenciais(env, db);
-  const secretos = { ssw: env.SSW_TRANSPORTADORAS, braspress: env.BRASPRESS_CONTAS };
+  const secretos = { ssw: env.SSW_TRANSPORTADORAS, braspress: env.BRASPRESS_CONTAS, saomiguel: env.SAOMIGUEL_CONTAS };
   return Object.entries(CAMPOS).map(([tipo, def]) => ({
     tipo, nome: def.nome, chave: def.chave, campos: def.campos.map(({ k, rotulo, obrig, secreto, ex, tipo: t }) => ({ k, rotulo, obrig: !!obrig, secreto: !!secreto, ex: ex || null, tipo: t || null })),
     noCloudflare: !!secretos[tipo], erro: cred[tipo] && cred[tipo].erro || null,
